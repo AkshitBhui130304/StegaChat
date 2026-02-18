@@ -1,0 +1,2802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hidden Harbor — Secure Steganography Video Call</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
+  <script src="/static/webrtc_crypto.js"></script>
+  <style>
+    :root {
+      --neon-blue: #00f2ff;
+      --neon-green: #00ff88;
+      --neon-purple: #7b61ff;
+      --bg-black: #000000;
+      --panel: #0f0f0f;
+      --panel-alt: #111;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Poppins', system-ui, sans-serif;
+      margin: 0;
+      background: var(--bg-black);
+      color: #e0e0e0;
+      min-height: 100vh;
+      transition: filter 0.3s ease;
+    }
+    body.cyber-mode { filter: contrast(1.05) saturate(1.1); }
+    body.cyber-mode .glitch-text { animation: glitch 0.3s infinite; }
+    @keyframes glitch {
+      0% { text-shadow: 2px 0 var(--neon-blue), -2px 0 var(--neon-green); }
+      25% { text-shadow: -2px 0 var(--neon-green), 2px 0 var(--neon-purple); }
+      50% { text-shadow: 2px 0 var(--neon-purple), -2px 0 var(--neon-blue); }
+      75% { text-shadow: -2px 0 var(--neon-blue), 2px 0 var(--neon-green); }
+      100% { text-shadow: 2px 0 var(--neon-green), -2px 0 var(--neon-purple); }
+    }
+    .container { max-width: 900px; margin: 0 auto; padding: 20px; position: relative; z-index: 1; }
+    h1 {
+      font-family: 'Orbitron', sans-serif; font-size: 1.6rem; margin: 0 0 8px 0; font-weight: 700;
+      color: var(--neon-blue); text-shadow: 0 0 20px rgba(0,242,255,0.6); letter-spacing: 0.05em;
+    }
+    .sub { color: #888; font-size: 0.9rem; margin-bottom: 20px; }
+    .btn-end-call {
+      margin-left: auto; padding: 8px 18px; border-radius: 999px; border: 1px solid rgba(255,80,80,0.6);
+      font-size: 0.9rem; font-weight: 600; cursor: pointer; background: rgba(255,60,60,0.15);
+      color: #ff6b6b; box-shadow: 0 0 15px rgba(255,80,80,0.3); transition: all 0.2s;
+    }
+    .btn-end-call:hover { background: rgba(255,80,80,0.25); box-shadow: 0 0 25px rgba(255,80,80,0.5); transform: scale(1.03); }
+
+    /* Modal */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.88); backdrop-filter: blur(14px);
+      display: flex; align-items: center; justify-content: center; z-index: 100;
+    }
+    .modal {
+      background: var(--panel); border: 1px solid rgba(0,242,255,0.25); border-radius: 16px;
+      padding: 28px; width: 90%; max-width: 420px; box-shadow: 0 0 40px rgba(0,242,255,0.08);
+    }
+    .modal h2 { font-family: 'Orbitron', sans-serif; margin: 0 0 8px 0; font-size: 1.2rem; color: var(--neon-blue); text-shadow: 0 0 12px rgba(0,242,255,0.4); }
+    .modal p { color: #999; font-size: 0.9rem; margin-bottom: 20px; }
+    .mode-options { display: flex; flex-direction: column; gap: 10px; }
+    .mode-opt {
+      display: flex; align-items: center; gap: 12px; padding: 14px 16px; border: 1px dashed rgba(0,242,255,0.2);
+      border-radius: 12px; cursor: pointer; background: var(--panel-alt); transition: all 0.2s;
+    }
+    .mode-opt:hover { border-color: var(--neon-blue); box-shadow: 0 0 20px rgba(0,242,255,0.15); }
+    .mode-opt.selected { border-color: var(--neon-purple); box-shadow: 0 0 25px rgba(123,97,255,0.25); background: rgba(123,97,255,0.08); }
+    .mode-opt input { display: none; }
+    .btn {
+      background: transparent; color: var(--neon-green); border: 1px solid var(--neon-green);
+      padding: 12px 20px; border-radius: 10px; cursor: pointer; font-size: 0.95rem; margin-top: 16px; width: 100%;
+      font-weight: 600; transition: all 0.2s; box-shadow: 0 0 15px rgba(0,255,136,0.2);
+    }
+    .btn:hover { background: rgba(0,255,136,0.1); box-shadow: 0 0 25px rgba(0,255,136,0.4); }
+    .btn.secondary { border-color: var(--neon-blue); color: var(--neon-blue); box-shadow: 0 0 15px rgba(0,242,255,0.2); }
+    .btn.secondary:hover { background: rgba(0,242,255,0.08); box-shadow: 0 0 25px rgba(0,242,255,0.35); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Join flow */
+    .join-section { margin-top: 20px; }
+    .join-section input {
+      width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(0,242,255,0.2);
+      background: var(--panel-alt); color: #e0e0e0; margin-bottom: 10px; transition: box-shadow 0.2s;
+    }
+    .join-section input:focus { outline: none; border-color: var(--neon-blue); box-shadow: 0 0 15px rgba(0,242,255,0.2); }
+    .link-box { background: var(--panel); border: 1px solid rgba(0,242,255,0.2); border-radius: 10px; padding: 14px; margin: 14px 0; word-break: break-all; font-size: 0.85rem; }
+    .link-box strong { color: var(--neon-blue); text-shadow: 0 0 10px rgba(0,242,255,0.4); }
+    .copy-btn { margin-left: 10px; padding: 6px 12px; font-size: 0.8rem; border-radius: 8px; border: 1px solid var(--neon-blue); color: var(--neon-blue); background: transparent; cursor: pointer; }
+    .copy-btn:hover { box-shadow: 0 0 15px rgba(0,242,255,0.3); }
+
+    /* Call UI: grid layout — left: video/input/chat, right: fixed sidebar */
+    #callUI {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 24px;
+      align-items: start;
+      min-height: 0;
+    }
+    @media (max-width: 768px) {
+      #callUI { grid-template-columns: 1fr; }
+    }
+    .call-main { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+    .call-sidebar {
+      width: 320px; min-width: 280px;
+      display: flex; flex-direction: column; gap: 14px; padding: 18px;
+      background: var(--panel-alt);
+      border: 1px solid rgba(0,255,213,0.25);
+      border-radius: 14px;
+      box-shadow: 0 0 24px rgba(0,255,213,0.08);
+    }
+    @media (max-width: 768px) { .call-sidebar { width: 100%; min-width: 0; } }
+    .call-header { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; background: var(--panel);
+      border: 1px solid rgba(0,242,255,0.2); border-radius: 999px; font-size: 0.8rem; font-family: 'Orbitron', sans-serif;
+    }
+    .badge.secure { color: var(--neon-green); border-color: var(--neon-green); box-shadow: 0 0 20px rgba(0,255,136,0.3); }
+    .badge.pending { color: #fbbf24; }
+    .video-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 12px; }
+    @media (max-width: 600px) { .video-grid { grid-template-columns: 1fr; } }
+    .video-panel {
+      background: var(--panel); border: 1px solid rgba(0,242,255,0.3); border-radius: 16px; overflow: hidden;
+      aspect-ratio: 4/3; box-shadow: 0 0 30px rgba(0,242,255,0.1), 0 8px 32px rgba(0,0,0,0.4);
+      transition: box-shadow 0.3s;
+    }
+    .video-panel:hover { box-shadow: 0 0 40px rgba(0,242,255,0.2), 0 8px 32px rgba(0,0,0,0.4); }
+    .video-panel video { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .video-panel .label {
+      padding: 8px 12px; background: rgba(0,0,0,0.6); font-size: 0.75rem; font-family: 'Orbitron', sans-serif;
+      color: var(--neon-blue); text-shadow: 0 0 10px rgba(0,242,255,0.5); letter-spacing: 0.1em;
+    }
+    .video-panel .placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: #666; font-size: 0.9rem; padding: 20px; text-align: center; }
+    /* Media controls row */
+    .media-controls { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+    .media-controls .ctrl-btn {
+      width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(0,242,255,0.3);
+      background: var(--panel); color: var(--neon-blue); cursor: pointer; font-size: 1.2rem;
+      display: flex; align-items: center; justify-content: center; transition: all 0.2s; box-shadow: 0 0 15px rgba(0,242,255,0.1);
+    }
+    .media-controls .ctrl-btn:hover { box-shadow: 0 0 25px rgba(0,242,255,0.4); transform: scale(1.05); }
+    .media-controls .ctrl-btn.active { border-color: var(--neon-green); color: var(--neon-green); box-shadow: 0 0 20px rgba(0,255,136,0.3); }
+    .media-controls .ctrl-btn.recording { animation: pulse-red 1.5s ease-in-out infinite; }
+    @keyframes pulse-red { 0%, 100% { box-shadow: 0 0 15px rgba(255,80,80,0.4); } 50% { box-shadow: 0 0 30px rgba(255,80,80,0.8); } }
+    .media-controls .volume-wrap { display: flex; align-items: center; gap: 8px; }
+    .media-controls .volume-wrap input[type="range"] { width: 80px; accent-color: #00ffd5; }
+    .media-controls .master-volume-wrap label { font-size: 0.75rem; color: rgba(0,255,213,0.9); }
+    .media-denied-msg { font-weight: 600; color: #e6edf3; margin: 0 0 8px 0; }
+    .media-denied-hint { font-size: 0.8rem; color: #8b949e; margin: 0 0 8px 0; line-height: 1.4; }
+    #btnRetryMedia { margin-top: 12px; cursor: pointer; }
+    /* Secret message notification - floating icon */
+    #secretNotificationIcon {
+      position: fixed; top: 20px; right: 20px; z-index: 200; width: 56px; height: 56px;
+      border-radius: 50%; background: var(--panel); border: 2px solid var(--neon-purple);
+      display: none; align-items: center; justify-content: center; font-size: 1.6rem; cursor: pointer;
+      box-shadow: 0 0 30px rgba(123,97,255,0.5); animation: notifPulse 2s ease-in-out infinite, notifFloat 3s ease-in-out infinite;
+    }
+    #secretNotificationIcon.visible { display: flex; }
+    #secretNotificationIcon .notif-icon-emoji { user-select: none; }
+    #secretNotificationIcon .notif-badge { position: absolute; top: -4px; right: -4px; min-width: 20px; height: 20px; background: var(--neon-green); color: #000; font-size: 0.7rem; font-weight: 700; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    @keyframes notifPulse { 0%, 100% { box-shadow: 0 0 25px rgba(123,97,255,0.5); } 50% { box-shadow: 0 0 45px rgba(123,97,255,0.8); } }
+    @keyframes notifFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+    /* Key established celebration */
+    #keyEstablishedCelebration {
+      position: fixed; inset: 0; z-index: 250; display: none; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.7); backdrop-filter: blur(8px);
+    }
+    #keyEstablishedCelebration.visible { display: flex; animation: fadeIn 0.3s ease; }
+    .cyber-toggle { display: inline-flex; align-items: center; cursor: pointer; user-select: none; }
+    .cyber-toggle input { display: none; }
+    .cyber-toggle-slider {
+      padding: 6px 12px; border-radius: 999px; font-size: 0.75rem; font-family: 'Orbitron', sans-serif;
+      border: 1px solid rgba(123,97,255,0.4); color: #888; transition: all 0.2s;
+    }
+    .cyber-toggle input:checked + .cyber-toggle-slider { border-color: var(--neon-purple); color: var(--neon-purple); box-shadow: 0 0 15px rgba(123,97,255,0.3); }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .key-celebration-inner { text-align: center; }
+    .key-celebration-inner .shield { font-size: 5rem; animation: shieldPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .key-celebration-inner .shield-line { width: 200px; height: 2px; background: linear-gradient(90deg, transparent, var(--neon-green), transparent); margin: 16px auto; animation: sweep 0.8s ease 0.3s both; }
+    @keyframes shieldPop { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @keyframes sweep { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+    .key-celebration-inner p { font-family: 'Orbitron', sans-serif; color: var(--neon-green); text-shadow: 0 0 20px rgba(0,255,136,0.6); }
+    .chat-row { display: flex; gap: 10px; margin-bottom: 10px; }
+    .chat-row input {
+      flex: 1; padding: 12px 14px; border-radius: 10px; border: 1px solid rgba(0,242,255,0.2);
+      background: var(--panel-alt); color: #e0e0e0; font-size: 0.95rem; transition: box-shadow 0.2s;
+    }
+    .chat-row input:focus { outline: none; border-color: var(--neon-blue); box-shadow: 0 0 20px rgba(0,242,255,0.2); }
+    .chat-row button {
+      padding: 12px 18px; border-radius: 10px; border: 1px solid; cursor: pointer; font-size: 0.9rem; font-weight: 600;
+      transition: all 0.2s; background: transparent;
+    }
+    .chat-row .send-btn { border-color: var(--neon-green); color: var(--neon-green); box-shadow: 0 0 15px rgba(0,255,136,0.2); }
+    .chat-row .send-btn:hover { background: rgba(0,255,136,0.1); box-shadow: 0 0 25px rgba(0,255,136,0.4); }
+    .chat-row .hidden-btn { border-color: var(--neon-purple); color: var(--neon-purple); box-shadow: 0 0 15px rgba(123,97,255,0.2); }
+    .chat-row .hidden-btn:hover { background: rgba(123,97,255,0.1); box-shadow: 0 0 25px rgba(123,97,255,0.4); }
+    .hidden-out { background: #0d1117; border: 1px solid #30363d; border-radius: 8px; padding: 12px; min-height: 80px; margin-top: 12px; }
+    .hidden-out .title { font-size: 0.8rem; color: #8b949e; margin-bottom: 6px; }
+    .hidden-out .content { font-size: 0.95rem; white-space: pre-wrap; word-break: break-word; }
+    .extract-btn { margin-top: 8px; padding: 8px 14px; background: #6e7681; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+    .extract-btn:hover { background: #8b949e; }
+    .extract-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .status-bar { font-size: 0.85rem; color: #94a3b8; margin-top: 12px; }
+    .status-bar.loading { color: #38bdf8; }
+    .status-bar.loading::before { content: ''; display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: middle; border: 2px solid rgba(148,163,184,0.3); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error { color: #f87171; }
+    .large-secret-panel { display: none; margin-top: 12px; padding: 14px 18px; background: rgba(99,102,241,0.15); border: 1px solid rgba(129,140,248,0.4); border-radius: 14px; color: #c7d2fe; }
+    .large-secret-panel.visible { display: block; }
+    .large-secret-panel .panel-title { font-weight: 600; font-size: 0.95rem; margin-bottom: 8px; color: #fff; }
+    .large-secret-panel .panel-desc { font-size: 0.85rem; margin-bottom: 10px; line-height: 1.4; }
+    .large-secret-panel .panel-stats { font-size: 0.8rem; color: #8bcdff; margin-bottom: 10px; }
+    .large-secret-panel .panel-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .large-secret-panel .panel-btn { padding: 8px 14px; border: none; border-radius: 6px; font-size: 0.85rem; cursor: pointer; background: #1f6feb; color: #fff; }
+    .large-secret-panel .panel-btn:hover { background: #388bfd; }
+    .large-secret-panel .panel-btn.secondary { background: #21262d; color: #c9d1d9; border: 1px solid #30363d; }
+    .large-secret-panel .panel-btn.secondary:hover { background: #30363d; }
+    .large-secret-panel .progress-wrap { display: none; margin-top: 10px; }
+    .large-secret-panel .progress-wrap.visible { display: block; }
+    .large-secret-panel .progress-label { font-size: 0.8rem; margin-bottom: 4px; }
+    .large-secret-panel .progress-bar { height: 8px; background: #21262d; border-radius: 4px; overflow: hidden; }
+    .large-secret-panel .progress-bar > div { display: block; height: 100%; border-radius: 4px; transition: width 0.2s; }
+    .success { color: #3fb950; }
+
+    /* Decrypt pop-up - matrix / glitch style */
+    .decrypt-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.9); backdrop-filter: blur(14px);
+      display: flex; align-items: center; justify-content: center; z-index: 150;
+      opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+    }
+    .decrypt-overlay.visible { opacity: 1; pointer-events: auto; }
+    .decrypt-modal {
+      width: 90%; max-width: 380px; padding: 32px;
+      background: var(--panel); border: 1px solid var(--neon-blue);
+      border-radius: 16px; box-shadow: 0 0 50px rgba(0,242,255,0.2);
+    }
+    .decrypt-modal .decrypt-hex {
+      font-family: 'Courier New', monospace; font-size: 0.7rem; color: var(--neon-green);
+      letter-spacing: 0.1em; line-height: 1.8; min-height: 48px; margin-bottom: 16px;
+      text-shadow: 0 0 10px rgba(0,255,136,0.5); opacity: 0.95;
+    }
+    .decrypt-modal .decrypt-progress {
+      height: 6px; background: var(--panel-alt); border-radius: 3px; overflow: hidden; margin-bottom: 16px;
+      border: 1px solid rgba(0,242,255,0.2);
+    }
+    .decrypt-modal .decrypt-progress-fill {
+      height: 100%; width: 0%; background: linear-gradient(90deg, var(--neon-blue), var(--neon-green));
+      border-radius: 3px; transition: width 0.15s linear; box-shadow: 0 0 15px rgba(0,255,136,0.4);
+    }
+    .decrypt-modal .decrypt-status { font-family: 'Orbitron', sans-serif; font-size: 0.85rem; color: var(--neon-blue); margin-top: 10px; text-shadow: 0 0 10px rgba(0,242,255,0.4); }
+    .decrypt-modal .decrypt-status.done { color: var(--neon-green); }
+
+    /* Chat window: full width, scroll, no overflow */
+    .chat-window {
+      background: var(--panel); border: 1px solid rgba(0,255,213,0.2); border-radius: 14px;
+      padding: 14px; max-height: 420px; overflow-y: auto; min-height: 0;
+      box-shadow: 0 0 20px rgba(0,255,213,0.05);
+    }
+    .chat-window .title {
+      font-size: 0.75rem; color: rgba(0,255,213,0.7); margin-bottom: 10px;
+      letter-spacing: 0.04em; font-weight: 500;
+    }
+    /* Message: row layout [ Cover Thumbnail | Secret Panel ] */
+    .chat-entry.message-bubble {
+      display: flex;
+      flex-direction: row;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--panel-alt);
+      border: 1px solid rgba(0,255,213,0.12);
+      transition: box-shadow 0.25s ease, border-color 0.25s ease;
+    }
+    .chat-entry.message-bubble:hover { box-shadow: 0 0 20px rgba(0,255,213,0.1); }
+    .chat-entry.message-bubble.revealed-state {
+      box-shadow: 0 0 24px rgba(0,255,213,0.2);
+      border-color: rgba(0,255,213,0.3);
+    }
+    .chat-entry.out { flex-direction: row-reverse; }
+    .chat-entry.chat-entry-new { animation: chatEntryIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    @keyframes chatEntryIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+    .chat-entry .cover-container { position: relative; flex-shrink: 0; display: flex !important; flex-direction: column; align-items: flex-start; gap: 6px; visibility: visible !important; }
+    .chat-entry .cover-wrapper { position: relative; flex-shrink: 0; }
+    .chat-entry .volume-boost-wrap { display: flex; align-items: center; gap: 8px; width: 100%; max-width: 140px; }
+    .chat-entry .volume-boost-wrap label { font-size: 0.7rem; color: rgba(0,255,213,0.8); white-space: nowrap; }
+    .chat-entry .volume-boost-wrap input[type="range"] { flex: 1; accent-color: #00ffd5; }
+    .chat-entry .secret-container {
+      flex: 1; min-width: 0; max-height: 0; overflow: hidden; opacity: 0;
+      transition: max-height 0.35s ease, opacity 0.3s ease;
+    }
+    .chat-entry.hidden-state .secret-container { max-height: 0; opacity: 0; pointer-events: none; }
+    .chat-entry.revealed-state .secret-container { max-height: 360px; opacity: 1; }
+    .chat-entry.revealed-state .cover-container { display: flex !important; }
+    .chat-entry .secret-container .secret-inner {
+      font-size: 0.9rem; padding: 10px 12px; background: rgba(0,0,0,0.35); border-radius: 10px;
+      border-left: 4px solid var(--neon-green); white-space: pre-wrap; word-break: break-word;
+      box-shadow: 0 0 12px rgba(0,255,136,0.08);
+    }
+    .chat-entry .secret-container .secret-inner.err { border-left-color: #ff6b6b; color: #ff9999; }
+    .chat-entry .secret-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+    .chat-entry .secret-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+    .chat-entry .cover-burst { animation: coverBurstSoft 0.5s ease-out forwards; pointer-events: none; }
+    @keyframes coverBurstSoft { 0% { transform: scale(1); filter: brightness(1); } 50% { transform: scale(1.05); filter: brightness(1.2); } 100% { transform: scale(1); filter: brightness(1); } }
+    .chat-entry .secret-reveal { animation: secretSlideIn 0.4s ease-out both; }
+    @keyframes secretSlideIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+    .chat-entry .thumb {
+      width: 120px; height: 90px; object-fit: cover; border-radius: 10px; cursor: pointer; flex-shrink: 0;
+      border: 1px solid rgba(0,242,255,0.2); transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .chat-entry .thumb.has-secret { border-color: var(--neon-purple); box-shadow: 0 0 20px rgba(123,97,255,0.3); }
+    .chat-entry .body { flex: 1; min-width: 0; }
+    .chat-entry .tap-hint { font-size: 0.75rem; color: var(--neon-blue); margin-top: 4px; text-shadow: 0 0 8px rgba(0,242,255,0.3); }
+    .chat-entry .revealed { font-size: 0.9rem; margin-top: 6px; padding: 10px; background: rgba(0,0,0,0.4); border-radius: 10px; border-left: 4px solid var(--neon-green); white-space: pre-wrap; word-break: break-word; box-shadow: 0 0 15px rgba(0,255,136,0.1); }
+    .chat-entry .revealed.err { border-left-color: #ff6b6b; color: #ff9999; }
+    .chat-entry .audio-card { width: 120px; height: 90px; border-radius: 10px; background: var(--panel); border: 1px solid rgba(0,242,255,0.2); display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+    .chat-entry .audio-card.has-secret { border-color: var(--neon-purple); box-shadow: 0 0 20px rgba(123,97,255,0.2); }
+    .chat-entry .audio-card .icon { font-size: 2rem; margin-bottom: 4px; }
+    .chat-entry .audio-card .label { font-size: 0.7rem; color: #8b949e; }
+    /* File upload zone - drag drop + neon */
+    .secret-source { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+    .secret-source label { font-size: 0.85rem; color: #999; }
+    .file-drop-zone {
+      position: relative; border: 2px dashed rgba(0,242,255,0.3); border-radius: 12px; padding: 12px 20px; cursor: pointer;
+      background: var(--panel-alt); transition: all 0.2s; max-width: 280px; min-height: 44px; display: flex; align-items: center;
+    }
+    .file-drop-zone:hover, .file-drop-zone.dragover { border-color: var(--neon-blue); box-shadow: 0 0 25px rgba(0,242,255,0.2); }
+    .file-drop-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; font-size: 0; }
+    .secret-source input[type="file"] { max-width: none; }
+    .secret-source .file-hint { font-size: 0.75rem; color: var(--neon-blue); text-shadow: 0 0 8px rgba(0,242,255,0.3); }
+    /* Neon buttons: no plain white */
+    .action-btn, .download-cover-btn, .panel-btn, .copy-btn.neon-btn {
+      display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 12px; font-size: 0.8rem;
+      font-weight: 500; cursor: pointer; transition: all 0.2s;
+      background: rgba(0,255,200,0.08); border: 1px solid #00ffd5; color: #00ffd5;
+      box-shadow: 0 0 12px rgba(0,255,213,0.15);
+    }
+    .action-btn:hover, .download-cover-btn:hover, .panel-btn:hover, .copy-btn.neon-btn:hover {
+      box-shadow: 0 0 22px rgba(0,255,213,0.35); background: rgba(0,255,200,0.12);
+    }
+    .action-btn.secondary { border-color: var(--neon-green); color: var(--neon-green); background: rgba(0,255,136,0.08); }
+    .action-btn.secondary:hover { box-shadow: 0 0 22px rgba(0,255,136,0.3); }
+    .chat-entry .revealed-media { max-width: 200px; max-height: 150px; border-radius: 6px; margin-top: 6px; }
+    .chat-entry .revealed-media video { max-width: 200px; max-height: 150px; border-radius: 6px; }
+    .image-side-by-side { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px; width: 100%; }
+    .image-side-by-side .cover-panel, .image-side-by-side .hidden-panel { flex: 1; min-width: 140px; }
+    .image-side-by-side .panel-label { font-size: 0.7rem; color: #8b949e; margin-bottom: 4px; font-weight: 600; }
+    .image-cover-only { margin-top: 6px; }
+    .image-cover-only img { max-width: 100%; max-height: 280px; border-radius: 6px; display: block; border: 1px solid #30363d; cursor: pointer; }
+    .image-side-by-side .cover-panel img { max-width: 100%; max-height: 200px; border-radius: 6px; display: block; border: 1px solid #30363d; transition: max-height 0.2s ease; }
+    .image-side-by-side.expanded .cover-panel img { max-height: 360px; cursor: pointer; }
+    .image-side-by-side .cover-panel img.cover-clickable { cursor: pointer; }
+    .image-side-by-side .hidden-panel { background: rgba(15,23,42,0.7); border-radius: 10px; padding: 10px; border-left: 4px solid #818cf8; min-height: 60px; }
+    .image-side-by-side .panel-btn {
+      padding: 8px 14px; border-radius: 12px; font-size: 0.8rem; cursor: pointer;
+      background: rgba(0,255,200,0.08); border: 1px solid #00ffd5; color: #00ffd5;
+      transition: all 0.2s; box-shadow: 0 0 12px rgba(0,255,213,0.15);
+    }
+    .image-side-by-side .panel-btn:hover { box-shadow: 0 0 22px rgba(0,255,213,0.35); background: rgba(0,255,200,0.12); }
+    .snapshot-expand-overlay { position: fixed; inset: 0; z-index: 1001; background: rgba(15,23,42,0.97); backdrop-filter: blur(16px); display: none; align-items: center; justify-content: center; padding: 24px; box-sizing: border-box; }
+    .snapshot-expand-overlay.visible { display: flex; animation: overlayFadeIn 0.25s ease; }
+    @keyframes overlayFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .snapshot-expand-overlay .snapshot-expand-backdrop { position: absolute; inset: 0; cursor: pointer; }
+    .snapshot-expand-overlay .snapshot-expand-content { position: relative; display: flex; gap: 24px; max-width: 95vw; max-height: 90vh; background: rgba(30,41,59,0.95); border-radius: 20px; padding: 24px; border: 1px solid rgba(148,163,184,0.2); overflow: auto; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
+    .snapshot-expand-overlay .snapshot-expand-close { position: absolute; top: 12px; right: 12px; z-index: 2; width: 40px; height: 40px; border: none; border-radius: 50%; background: rgba(51,65,85,0.9); color: #e2e8f0; font-size: 1.3rem; cursor: pointer; line-height: 1; transition: background 0.2s; }
+    .snapshot-expand-overlay .snapshot-expand-close:hover { background: rgba(71,85,105,0.95); }
+    .snapshot-expand-overlay .cover-col { position: relative; transition: transform 0.4s ease, filter 0.4s ease, opacity 0.4s ease; }
+    .snapshot-expand-overlay .cover-col.blast { animation: coverBlast 0.6s ease-out forwards; pointer-events: none; }
+    @keyframes coverBlast { 0% { transform: scale(1); filter: brightness(1) blur(0); opacity: 1; } 40% { transform: scale(1.08); filter: brightness(1.4) blur(2px); opacity: 1; } 100% { transform: scale(1.2); filter: brightness(2) blur(8px); opacity: 0; } }
+    .snapshot-expand-overlay .cover-col img { max-height: 75vh; max-width: 45vw; border-radius: 12px; display: block; border: 1px solid rgba(148,163,184,0.2); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+    .snapshot-expand-overlay .hidden-col { min-width: 200px; background: rgba(15,23,42,0.95); border-radius: 12px; padding: 20px; border-left: 4px solid #818cf8; transition: transform 0.35s ease, opacity 0.35s ease; }
+    .snapshot-expand-overlay .hidden-col.reveal { animation: secretReveal 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards; }
+    @keyframes secretReveal { from { transform: scale(0.92); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .snapshot-expand-overlay .hidden-col .panel-label { font-size: 0.75rem; color: #94a3b8; margin-bottom: 8px; font-weight: 600; }
+    .snapshot-expand-overlay .hidden-col .panel-btn {
+      padding: 8px 14px; margin-right: 8px; margin-top: 8px; border-radius: 12px; font-size: 0.85rem; cursor: pointer;
+      background: rgba(0,255,200,0.08); border: 1px solid #00ffd5; color: #00ffd5;
+      box-shadow: 0 0 12px rgba(0,255,213,0.15); transition: all 0.2s;
+    }
+    .snapshot-expand-overlay .hidden-col .panel-btn:hover { box-shadow: 0 0 22px rgba(0,255,213,0.35); background: rgba(0,255,200,0.12); }
+    .snapshot-expand-overlay .hidden-col .revealed-media { max-width: 100%; max-height: 200px; border-radius: 8px; margin-top: 8px; display: block; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+    .send-mode-label { font-size: 0.8rem; color: var(--muted, #718096); margin-left: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔐 Hidden Harbor</h1>
+    <p class="sub">Secure multimedia steganography video call — hide messages in audio, video, or snapshots.</p>
+
+    <div id="modalOverlay" class="overlay">
+      <div class="modal">
+        <h2>Choose how to hide your secret</h2>
+        <p>Select where hidden messages will be embedded before joining the call.</p>
+        <div class="mode-options">
+          <label class="mode-opt" data-mode="audio">
+            <input type="radio" name="embed_mode" value="audio">
+            <span>🔊 Embed in <strong>Audio chunks</strong></span>
+          </label>
+          <label class="mode-opt" data-mode="video">
+            <input type="radio" name="embed_mode" value="video" checked>
+            <span>🎥 Embed in <strong>Recorded video</strong> (video steganography; records until you send, then resets)</span>
+          </label>
+          <label class="mode-opt" data-mode="image">
+            <input type="radio" name="embed_mode" value="image">
+            <span>📷 Embed in <strong>Snapshot</strong> (image steganography; one frame when you send)</span>
+          </label>
+        </div>
+        <button id="btnStartCall" class="btn">Start a call</button>
+        <div class="join-section">
+          <input type="text" id="roomIdInput" placeholder="Or paste room ID / open shared link">
+          <button id="btnJoinRoom" class="btn secondary">Join with link / ID</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="secretNotificationIcon" title="New secret message — click to open" aria-label="New secret message">
+      <span class="notif-icon-emoji">🔐</span>
+      <span class="notif-badge" id="secretNotifBadge" style="display: none;">0</span>
+    </div>
+    <div id="keyEstablishedCelebration" aria-hidden="true">
+      <div class="key-celebration-inner">
+        <div class="shield">🛡️</div>
+        <div class="shield-line"></div>
+        <p>Secure key established</p>
+      </div>
+    </div>
+    <div id="callUI" style="display: none;">
+      <div class="call-main">
+      <div class="video-grid">
+        <div class="video-panel">
+          <div class="label">You</div>
+          <video id="localVideo" autoplay muted playsinline></video>
+          <div id="localPlaceholder" class="placeholder" style="display: none;">Camera off</div>
+        </div>
+        <div class="video-panel">
+          <div class="label">Peer</div>
+          <video id="remoteVideo" autoplay playsinline controls style="width:100%;height:100%;object-fit:cover;display:none;"></video>
+          <div id="remotePlaceholder" class="placeholder">Waiting for peer…</div>
+        </div>
+      </div>
+      <div class="media-controls" id="mediaControls">
+        <button type="button" class="ctrl-btn" id="btnMute" title="Mute microphone" aria-label="Mute">🎤</button>
+        <button type="button" class="ctrl-btn" id="btnCamera" title="Turn camera off" aria-label="Camera">📷</button>
+        <button type="button" class="ctrl-btn" id="btnScreenShare" title="Share screen" aria-label="Screen share">🖥️</button>
+        <div class="volume-wrap">
+          <span class="volume-icon" aria-hidden="true">🔊</span>
+          <input type="range" id="remoteVolume" min="0" max="1" step="0.05" value="1" title="Remote volume">
+        </div>
+        <div class="volume-wrap master-volume-wrap">
+          <span class="volume-icon" aria-hidden="true">🔊</span>
+          <label for="masterVolume">Master</label>
+          <input type="range" id="masterVolume" min="0" max="1" step="0.05" value="1" title="Master volume (local + cover media)">
+        </div>
+        <button type="button" class="ctrl-btn" id="btnRecord" title="Start/stop recording video for embedding" aria-label="Record">🔴</button>
+      </div>
+      <div id="decryptOverlay" class="decrypt-overlay">
+        <div class="decrypt-modal">
+          <div id="decryptHex" class="decrypt-hex"></div>
+          <div class="decrypt-progress"><div id="decryptProgressFill" class="decrypt-progress-fill" style="width:0%"></div></div>
+          <div id="decryptStatus" class="decrypt-status">Verifying key…</div>
+        </div>
+      </div>
+      <div id="snapshotExpandOverlay" class="snapshot-expand-overlay">
+        <div class="snapshot-expand-backdrop" id="snapshotExpandBackdrop"></div>
+        <div class="snapshot-expand-content" id="snapshotExpandContent">
+          <button type="button" class="snapshot-expand-close" id="snapshotExpandClose" aria-label="Close">×</button>
+          <div class="cover-col" id="snapshotExpandCover"></div>
+          <div class="hidden-col" id="snapshotExpandHidden"></div>
+        </div>
+      </div>
+      <div class="chat-row">
+        <input type="text" id="messageInput" placeholder="Type a message or hidden message…">
+        <button type="button" class="hidden-btn" id="btnSendHidden">Send as hidden</button>
+        <span id="sendModeLabel" class="send-mode-label" aria-live="polite"></span>
+      </div>
+      <div class="secret-source">
+        <label>Or attach file to hide:</label>
+        <div class="file-drop-zone" id="fileDropZone">
+          <input type="file" id="fileToHide" accept="image/*,audio/*,video/*">
+          <span class="file-hint" id="fileToHideHint">Drop file here or click — no file selected</span>
+        </div>
+      </div>
+      <div class="chat-window">
+        <div class="title">🔐 Click audio/video to decrypt hidden message</div>
+        <div id="chatList"></div>
+      </div>
+      <div class="progress-wrap" id="largeSecretProgressWrap" style="display:none;margin-top:8px;">
+        <div class="progress-label" id="largeSecretProgressLabel">Embedding hidden data: 0%</div>
+        <div class="progress-bar"><div id="largeSecretProgressFill" style="width:0%;height:100%;background:#58a6ff;border-radius:4px;"></div></div>
+      </div>
+      <div class="status-bar" id="statusBar"></div>
+      </div>
+      <aside class="call-sidebar">
+        <div class="call-header">
+          <span id="modeBadge" class="badge">Mode: Video</span>
+          <span id="keyBadge" class="badge pending">🔑 Establishing secure key…</span>
+          <span id="peerCount" class="badge">0 peers</span>
+          <label class="cyber-toggle" title="Cyber mode">
+            <input type="checkbox" id="cyberModeToggle" autocomplete="off">
+            <span class="cyber-toggle-slider">Cyber</span>
+          </label>
+        </div>
+        <div id="linkBox" class="link-box" style="display: none;">
+          <strong>Share link:</strong><br>
+          <span id="shareLink"></span>
+          <button type="button" class="btn secondary copy-btn neon-btn" id="copyLinkBtn">Copy</button>
+        </div>
+        <button type="button" id="btnEndCall" class="btn-end-call" title="End call">📞 End call</button>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+(function() {
+  const modalOverlay = document.getElementById('modalOverlay');
+  const callUI = document.getElementById('callUI');
+  const roomIdInput = document.getElementById('roomIdInput');
+  const btnStartCall = document.getElementById('btnStartCall');
+  const btnJoinRoom = document.getElementById('btnJoinRoom');
+  const linkBox = document.getElementById('linkBox');
+  const shareLink = document.getElementById('shareLink');
+  const copyLinkBtn = document.getElementById('copyLinkBtn');
+  const modeBadge = document.getElementById('modeBadge');
+  const keyBadge = document.getElementById('keyBadge');
+  const peerCount = document.getElementById('peerCount');
+  const localVideo = document.getElementById('localVideo');
+  const localPlaceholder = document.getElementById('localPlaceholder');
+  const remoteVideo = document.getElementById('remoteVideo');
+  const remotePlaceholder = document.getElementById('remotePlaceholder');
+  const messageInput = document.getElementById('messageInput');
+  const btnSendHidden = document.getElementById('btnSendHidden');
+  const btnEndCall = document.getElementById('btnEndCall');
+  const fileToHide = document.getElementById('fileToHide');
+  const fileToHideHint = document.getElementById('fileToHideHint');
+  const statusBar = document.getElementById('statusBar');
+  const chatList = document.getElementById('chatList');
+  const largeSecretProgressWrap = document.getElementById('largeSecretProgressWrap');
+  const largeSecretProgressLabel = document.getElementById('largeSecretProgressLabel');
+  const largeSecretProgressFill = document.getElementById('largeSecretProgressFill');
+
+  let selectedSecretFile = null;
+  let autoChunkStreaming = false;
+  let autoChunkIntervalId = null;
+  let hybridTokenPending = null;
+
+  let socket = null;
+  let roomId = null;
+  let embedMode = 'video';
+  let keyEstablished = false;
+  let roomKeyB64 = null;
+  let pendingContinuation = null;
+  let localStream = null;
+  let audioContext = null;
+  var gainNodesByEntryId = {};
+  var masterVolume = 1;
+  let chatEntries = [];
+  let nextChatId = 1;
+  let secretUnreadCount = 0;
+  const CHUNK_SIZE_BYTES = 32 * 1024;
+  const ENCRYPT_OVERHEAD = 100;
+  const AUDIO_COVER_MAX_BYTES = 60000;
+  const IMAGE_COVER_MAX_BYTES = 80000;
+  const VIDEO_COVER_MAX_BYTES = 100000;
+  const EXTRACT_TIMEOUT_MS = 25000;  // 25s so link/hybrid and slower extracts don't time out
+  let extractTimeoutId = null;
+  let pendingChunks = null;
+  let chunkBuffers = {};
+  let hybridPendingInfo = null;
+  let currentExpandedEntryId = null;
+
+  // WebRTC: P2P media + DataChannel for hidden messages (no server-side frame processing)
+  let pc = null;
+  let dataChannel = null;
+  let isRoomCreator = false;
+  let pendingWebRTCSignals = [];
+  let offerSentByCreator = false;
+
+  // Video steganography: record frames when in Video mode; used as cover when user sends
+  let videoFrameBuffer = [];
+  let videoRecordIntervalId = null;
+  let screenShareStream = null;  // when set, screen share is active; stop its tracks to disable
+  let currentVideoTrack = null;  // current video track (camera or screen) for mute/camera button
+  const VIDEO_RECORD_FPS = 5;
+  const VIDEO_RECORD_MAX_FRAMES = 8;   // small payload to avoid socket disconnect when sending video cover
+
+  // Mic recording: controlled start/stop, Float32 chunks → Int16 PCM (no ring buffer)
+  const AUDIO_SAMPLE_RATE = 48000;  // target; actual from AudioContext.sampleRate
+  let recordedChunks = [];         // array of Float32Array (mono)
+  let recordedSampleRate = AUDIO_SAMPLE_RATE;
+  let audioRecorderContext = null;
+  let audioRecorderSource = null;
+  let audioRecorderGainNode = null;
+  let audioRecorderNode = null;
+  let recordingActive = false;
+
+  // Parse room from URL (e.g. /call/abc123)
+  const pathRoom = location.pathname.split('/call/')[1];
+  if (pathRoom) roomIdInput.value = pathRoom.trim();
+
+  document.querySelectorAll('.mode-opt').forEach(el => {
+    el.addEventListener('click', () => {
+      document.querySelectorAll('.mode-opt').forEach(o => o.classList.remove('selected'));
+      el.classList.add('selected');
+      el.querySelector('input').checked = true;
+      embedMode = el.dataset.mode;
+    });
+  });
+  document.querySelector('.mode-opt[data-mode="video"]').classList.add('selected');
+
+  function setStatus(msg, isError, loading) {
+    statusBar.textContent = msg;
+    statusBar.className = 'status-bar' + (loading ? ' loading' : '') + (isError ? ' error' : '');
+  }
+
+  function addChatEntry(entry) {
+    entry.id = entry.id || 'c' + (nextChatId++);
+    entry._justAdded = true;
+    if (entry.direction === 'in' && entry.hasSecret) {
+      secretUnreadCount++;
+      showSecretNotification();
+    }
+    chatEntries.push(entry);
+    renderChat();
+  }
+  function showSecretNotification() {
+    var el = document.getElementById('secretNotificationIcon');
+    var badge = document.getElementById('secretNotifBadge');
+    if (!el) return;
+    el.classList.add('visible');
+    if (badge) { badge.style.display = 'flex'; badge.textContent = secretUnreadCount > 99 ? '99+' : String(secretUnreadCount); }
+  }
+  function hideSecretNotification(resetCount) {
+    if (resetCount) secretUnreadCount = 0;
+    var el = document.getElementById('secretNotificationIcon');
+    var badge = document.getElementById('secretNotifBadge');
+    if (el) el.classList.remove('visible');
+    if (badge) { badge.style.display = 'none'; badge.textContent = '0'; }
+  }
+
+  var activeDecryptOverlay = null;
+  function runDecryptAnimation(doneCallback) {
+    var overlay = document.getElementById('decryptOverlay');
+    var hexEl = document.getElementById('decryptHex');
+    var fillEl = document.getElementById('decryptProgressFill');
+    var statusEl = document.getElementById('decryptStatus');
+    if (!overlay || !hexEl || !fillEl || !statusEl) { if (doneCallback) doneCallback(); return; }
+    activeDecryptOverlay = { overlay: overlay, hexEl: hexEl, fillEl: fillEl, statusEl: statusEl, doneCallback: doneCallback };
+    hexEl.textContent = '';
+    fillEl.style.width = '0%';
+    statusEl.textContent = 'Decrypting…';
+    statusEl.classList.remove('done');
+    overlay.classList.add('visible');
+    var duration = 400;
+    var start = Date.now();
+    var hexChars = '0123456789ABCDEF';
+    var matrixInterval = setInterval(function() {
+      if (!hexEl || !hexEl.offsetParent) return;
+      var line = '';
+      for (var i = 0; i < 12; i++) line += hexChars[Math.floor(Math.random() * 16)] + ' ';
+      hexEl.textContent = (hexEl.textContent || '') ? (hexEl.textContent.split('\n').slice(-3).concat([line]).join('\n')) : line;
+    }, 80);
+    var progressInterval = setInterval(function() {
+      var elapsed = Date.now() - start;
+      fillEl.style.width = Math.min(100, (elapsed / duration) * 100) + '%';
+      if (elapsed >= duration) {
+        clearInterval(matrixInterval);
+        clearInterval(progressInterval);
+        if (activeDecryptOverlay && activeDecryptOverlay.overlay === overlay) {
+          overlay.classList.remove('visible');
+          activeDecryptOverlay = null;
+          if (doneCallback) doneCallback();
+        }
+      }
+    }, 50);
+  }
+  function dismissDecryptOverlay() {
+    if (activeDecryptOverlay) {
+      activeDecryptOverlay.overlay.classList.remove('visible');
+      var cb = activeDecryptOverlay.doneCallback;
+      activeDecryptOverlay = null;
+      if (cb) cb();
+    }
+  }
+  function clearExtractTimeout() {
+    if (extractTimeoutId) { clearTimeout(extractTimeoutId); extractTimeoutId = null; }
+  }
+  function startExtractTimeout(requestId) {
+    clearExtractTimeout();
+    extractTimeoutId = setTimeout(function() {
+      extractTimeoutId = null;
+      var ent = chatEntries.find(function(x) { return String(x.id) === String(requestId); });
+      if (ent && ent.extracting) {
+        ent.extracting = false;
+        ent.error = 'Decrypt timed out (25s). Try again or use link (video/large files open in new tab).';
+        setStatus(ent.error, true);
+        renderChat();
+      }
+    }, EXTRACT_TIMEOUT_MS);
+  }
+
+  function fillSnapshotExpandOverlay(entry) {
+    var coverEl = document.getElementById('snapshotExpandCover');
+    var hiddenEl = document.getElementById('snapshotExpandHidden');
+    if (!coverEl || !hiddenEl || !entry || !entry.payload) return;
+    var mime = (entry.format === 'jpeg') ? 'image/jpeg' : 'image/png';
+    coverEl.innerHTML = '';
+    var coverImg = document.createElement('img');
+    coverImg.src = 'data:' + mime + ';base64,' + entry.payload;
+    coverImg.alt = 'Cover';
+    coverEl.appendChild(coverImg);
+    hiddenEl.innerHTML = '';
+    var label = document.createElement('div');
+    label.className = 'panel-label';
+    label.textContent = 'Hidden';
+    hiddenEl.appendChild(label);
+    if (entry.extracting) {
+      hiddenEl.appendChild(document.createTextNode('Decrypting…'));
+    } else if (entry.error) {
+      var errSpan = document.createElement('div');
+      errSpan.className = 'revealed err';
+      errSpan.textContent = entry.error;
+      hiddenEl.appendChild(errSpan);
+    } else if (entry.secretType === 'secure_link' && entry.secureLinkFileId) {
+      var openBtn = document.createElement('button');
+      openBtn.type = 'button';
+      openBtn.className = 'panel-btn';
+      openBtn.textContent = 'Open in New Tab';
+      openBtn.onclick = function() {
+        var origin = location.origin || (location.protocol + '//' + location.host);
+        var url = origin + '/secure-file/' + encodeURIComponent(entry.secureLinkFileId) + '?room_id=' + encodeURIComponent(roomId);
+        window.open(url, '_blank', 'noopener');
+      };
+      hiddenEl.appendChild(openBtn);
+      var dlBtn = document.createElement('button');
+      dlBtn.type = 'button';
+      dlBtn.className = 'panel-btn';
+      dlBtn.textContent = 'Download';
+      dlBtn.onclick = function() {
+        var origin = location.origin || (location.protocol + '//' + location.host);
+        var url = origin + '/secure-file/' + encodeURIComponent(entry.secureLinkFileId) + '?room_id=' + encodeURIComponent(roomId);
+        fetch(url).then(function(r) { return r.blob(); }).then(function(blob) {
+          downloadBlob(blob, entry.hybridFilename || 'secure_file');
+        }).catch(function(err) { setStatus('Download failed: ' + (err.message || err), true); });
+      };
+      hiddenEl.appendChild(dlBtn);
+    } else if (entry.message !== undefined) {
+      var pMsg = document.createElement('div');
+      pMsg.className = 'revealed';
+      pMsg.textContent = entry.message;
+      hiddenEl.appendChild(pMsg);
+      var copyBtn = document.createElement('button');
+      copyBtn.type = 'button';
+      copyBtn.className = 'panel-btn';
+      copyBtn.textContent = 'Copy';
+      copyBtn.onclick = function() {
+        navigator.clipboard.writeText(entry.message).then(function() { setStatus('Copied.', false); }).catch(function() { setStatus('Copy failed.', true); });
+      };
+      hiddenEl.appendChild(copyBtn);
+    } else if (entry.secretType === 'image' && entry.secretPayload) {
+      var imgMime = 'image/jpeg';
+      try {
+        var bin = atob(entry.secretPayload);
+        if (bin.length >= 2 && bin.charCodeAt(0) === 0x89 && bin.charCodeAt(1) === 0x50) imgMime = 'image/png';
+        else if (bin.length >= 2 && bin.charCodeAt(0) === 0xFF && bin.charCodeAt(1) === 0xD8) imgMime = 'image/jpeg';
+      } catch (err) {}
+      var revImg = document.createElement('img');
+      revImg.className = 'revealed-media';
+      revImg.src = 'data:' + imgMime + ';base64,' + entry.secretPayload;
+      revImg.alt = 'Revealed';
+      hiddenEl.appendChild(revImg);
+      var revDl = document.createElement('button');
+      revDl.type = 'button';
+      revDl.className = 'panel-btn';
+      revDl.textContent = 'Download';
+      revDl.onclick = function() {
+        var dataUrl = 'data:' + imgMime + ';base64,' + entry.secretPayload;
+        var a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = 'revealed_image.' + (imgMime === 'image/png' ? 'png' : 'jpg');
+        a.click();
+      };
+      hiddenEl.appendChild(revDl);
+    } else {
+      hiddenEl.appendChild(document.createTextNode('Decrypting…'));
+    }
+    var isRevealed = (entry.secretType === 'secure_link' && entry.secureLinkFileId) || entry.message !== undefined || (entry.secretType === 'image' && entry.secretPayload);
+    if (isRevealed) {
+      coverEl.classList.add('blast');
+      hiddenEl.classList.add('reveal');
+      setTimeout(function() { coverEl.classList.remove('blast'); hiddenEl.classList.remove('reveal'); }, 700);
+    }
+  }
+
+  function openSnapshotExpand(entry) {
+    if (!entry || !entry.payload) return;
+    currentExpandedEntryId = String(entry.id);
+    entry.expanded = true;
+    fillSnapshotExpandOverlay(entry);
+    var overlay = document.getElementById('snapshotExpandOverlay');
+    if (overlay) overlay.classList.add('visible');
+  }
+
+  function closeSnapshotExpand() {
+    if (currentExpandedEntryId == null) return;
+    var ent = chatEntries.find(function(x) { return String(x.id) === String(currentExpandedEntryId); });
+    if (ent) ent.expanded = false;
+    currentExpandedEntryId = null;
+    var overlay = document.getElementById('snapshotExpandOverlay');
+    if (overlay) overlay.classList.remove('visible');
+    renderChat();
+  }
+
+  (function wireSnapshotOverlayClose() {
+    var overlay = document.getElementById('snapshotExpandOverlay');
+    var backdrop = document.getElementById('snapshotExpandBackdrop');
+    var closeBtn = document.getElementById('snapshotExpandClose');
+    if (backdrop) backdrop.addEventListener('click', closeSnapshotExpand);
+    if (closeBtn) closeBtn.addEventListener('click', closeSnapshotExpand);
+    if (overlay) {
+      overlay.addEventListener('click', function(ev) {
+        if (ev.target === overlay) closeSnapshotExpand();
+      });
+    }
+  })();
+
+  function playVideoFrames(frames, fps, format) {
+    if (!frames || !frames.length) return;
+    var idx = 0;
+    var mime = (format === 'png') ? 'image/png' : 'image/jpeg';
+    var interval = 1000 / (fps || 5);
+    var el = document.createElement('div');
+    el.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;z-index:200;';
+    var img = document.createElement('img');
+    img.style.maxWidth = '90%'; img.style.maxHeight = '90%'; img.style.objectFit = 'contain';
+    img.src = 'data:' + mime + ';base64,' + frames[0];
+    el.appendChild(img);
+    el.addEventListener('click', function() { clearInterval(tid); document.body.removeChild(el); });
+    document.body.appendChild(el);
+    var tid = setInterval(function() {
+      idx = (idx + 1) % frames.length;
+      img.src = 'data:' + mime + ';base64,' + frames[idx];
+    }, interval);
+  }
+
+  function downloadBlob(blob, filename) {
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+  function downloadCoverAudio(b64, sampleRate, filename) {
+    if (!b64) return;
+    var binary = atob(b64);
+    var len = binary.length - (binary.length % 2);
+    var numSamples = len / 2;
+    var rate = sampleRate || 48000;
+    var numChannels = 1;
+    var bytesPerSample = 2;
+    var dataLen = numSamples * numChannels * bytesPerSample;
+    var buffer = new ArrayBuffer(44 + dataLen);
+    var view = new DataView(buffer);
+    var pos = 0;
+    function writeStr(s) { for (var i = 0; i < s.length; i++) view.setUint8(pos++, s.charCodeAt(i)); }
+    writeStr('RIFF');
+    view.setUint32(pos, 36 + dataLen, true); pos += 4;
+    writeStr('WAVE');
+    writeStr('fmt ');
+    view.setUint32(pos, 16, true); pos += 4;
+    view.setUint16(pos, 1, true); pos += 2;
+    view.setUint16(pos, numChannels, true); pos += 2;
+    view.setUint32(pos, rate, true); pos += 4;
+    view.setUint32(pos, rate * numChannels * bytesPerSample, true); pos += 4;
+    view.setUint16(pos, numChannels * bytesPerSample, true); pos += 2;
+    view.setUint16(pos, 8 * bytesPerSample, true); pos += 2;
+    writeStr('data');
+    view.setUint32(pos, dataLen, true); pos += 4;
+    for (var i = 0; i < dataLen; i++) view.setUint8(pos++, binary.charCodeAt(i));
+    downloadBlob(new Blob([buffer], { type: 'audio/wav' }), filename || 'cover_audio.wav');
+  }
+  function wavBlobUrlFromPcmB64(b64, sampleRate) {
+    if (!b64) return null;
+    var binary = atob(b64);
+    var len = binary.length - (binary.length % 2);
+    var numSamples = len / 2;
+    var rate = sampleRate || 48000;
+    var dataLen = numSamples * 2;
+    var buffer = new ArrayBuffer(44 + dataLen);
+    var view = new DataView(buffer);
+    var pos = 0;
+    function writeStr(s) { for (var i = 0; i < s.length; i++) view.setUint8(pos++, s.charCodeAt(i)); }
+    writeStr('RIFF');
+    view.setUint32(pos, 36 + dataLen, true); pos += 4;
+    writeStr('WAVE');
+    writeStr('fmt ');
+    view.setUint32(pos, 16, true); pos += 4;
+    view.setUint16(pos, 1, true); view.setUint16(pos + 2, 1, true); pos += 4;
+    view.setUint32(pos, rate, true); pos += 4;
+    view.setUint32(pos, rate * 2, true); pos += 4;
+    view.setUint16(pos, 2, true); view.setUint16(pos + 2, 16, true); pos += 4;
+    writeStr('data');
+    view.setUint32(pos, dataLen, true); pos += 4;
+    for (var i = 0; i < dataLen; i++) view.setUint8(pos++, binary.charCodeAt(i));
+    return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
+  }
+  /**
+   * Analyze PCM base64 (16-bit LE mono) to see if audio has real signal (not silence).
+   * Returns: { hasSignal, rms, maxAbs, db }.
+   * Use from console: checkAudioCover(payloadB64) or checkAudioCover(entryId) to check a chat entry.
+   */
+  function analyzePcmB64(b64) {
+    if (!b64 || typeof b64 !== 'string') return { hasSignal: false, rms: 0, maxAbs: 0, db: -100 };
+    try {
+      var binary = atob(b64);
+      var len = binary.length - (binary.length % 2);
+      if (len < 2) return { hasSignal: false, rms: 0, maxAbs: 0, db: -100 };
+      var ab = new ArrayBuffer(len);
+      var bytes = new Uint8Array(ab);
+      for (var i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+      var int16 = new Int16Array(ab, 0, len / 2);
+      var n = int16.length;
+      var sumSq = 0;
+      var maxAbs = 0;
+      for (var j = 0; j < n; j++) {
+        var s = int16[j];
+        var a = s < 0 ? -s : s;
+        if (a > maxAbs) maxAbs = a;
+        sumSq += s * s;
+      }
+      var rms = n > 0 ? Math.sqrt(sumSq / n) / 32768 : 0;
+      var db = rms <= 1e-7 ? -100 : (20 * Math.log10(rms));
+      var hasSignal = maxAbs >= 32 && rms >= 0.0005;
+      return { hasSignal: hasSignal, rms: rms, maxAbs: maxAbs, db: Math.max(-100, db) };
+    } catch (e) { return { hasSignal: false, rms: 0, maxAbs: 0, db: -100 }; }
+  }
+  function checkAudioCover(entryIdOrB64) {
+    if (typeof entryIdOrB64 === 'string' && /^[A-Za-z0-9+/=]+$/.test(entryIdOrB64) && entryIdOrB64.length > 100) {
+      var r = analyzePcmB64(entryIdOrB64);
+      console.log('Audio cover (raw B64): hasSignal=' + r.hasSignal + ', rms=' + r.rms.toFixed(6) + ', maxAbs=' + r.maxAbs + ', dB≈' + r.db.toFixed(1));
+      return r;
+    }
+    var ent = chatEntries.find(function(x) { return String(x.id) === String(entryIdOrB64); });
+    if (ent && (ent.payload || ent.audioPayload)) {
+      var b64 = ent.payload || ent.audioPayload;
+      var r = analyzePcmB64(b64);
+      console.log('Audio cover (entry ' + entryIdOrB64 + '): hasSignal=' + r.hasSignal + ', rms=' + r.rms.toFixed(6) + ', maxAbs=' + r.maxAbs + ', dB≈' + r.db.toFixed(1));
+      return r;
+    }
+    console.warn('checkAudioCover: pass an entry id or a PCM base64 string');
+    return null;
+  }
+  function playAudioFull(b64, sampleRate, gainMultiplier) {
+    if (!b64) return;
+    var boost = (gainMultiplier != null && gainMultiplier > 0) ? gainMultiplier : 2.5;
+    var gain = boost * getMasterVolume();
+    function doPlay() {
+      try {
+        var binary = atob(b64);
+        var len = binary.length;
+        if (len < 2) return;
+        len = len - (len % 2);
+        var ab = new ArrayBuffer(len);
+        var bytes = new Uint8Array(ab);
+        for (var i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+        var int16 = new Int16Array(ab, 0, len / 2);
+        var n = int16.length;
+        var float32 = new Float32Array(n);
+        for (var j = 0; j < n; j++) float32[j] = int16[j] / (int16[j] < 0 ? 0x8000 : 0x7FFF);
+        var ctx = audioContext || new (window.AudioContext || window.webkitAudioContext)();
+        audioContext = ctx;
+        var buf = ctx.createBuffer(1, n, sampleRate || 48000);
+        buf.getChannelData(0).set(float32);
+        var src = ctx.createBufferSource();
+        var gainNode = ctx.createGain();
+        gainNode.gain.value = gain;
+        src.buffer = buf;
+        src.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        src.start(0);
+        var level = analyzePcmB64(b64);
+        setStatus('Playing audio…' + (level.hasSignal ? ' (' + level.db.toFixed(0) + ' dB)' : ' (silent/low)'), false);
+      } catch (err) { console.warn('Play audio failed', err); setStatus('Could not play audio.', true); }
+    }
+    try {
+      var ctx = audioContext || new (window.AudioContext || window.webkitAudioContext)();
+      audioContext = ctx;
+      if (ctx.state === 'suspended') {
+        ctx.resume().then(doPlay).catch(function(e) { console.warn('AudioContext resume failed', e); doPlay(); });
+        return;
+      }
+      doPlay();
+    } catch (err) { console.warn('Play audio failed', err); setStatus('Could not play audio.', true); }
+  }
+  function getMasterVolume() {
+    var el = document.getElementById('masterVolume');
+    return el ? parseFloat(el.value) : 1;
+  }
+  function applyMasterVolume() {
+    var v = getMasterVolume();
+    masterVolume = v;
+    if (localVideo) localVideo.volume = v;
+    if (remoteVideo) remoteVideo.volume = v;
+    if (chatList) {
+      chatList.querySelectorAll('.cover-container audio, .cover-container video').forEach(function(m) { m.volume = v; });
+      Object.keys(gainNodesByEntryId).forEach(function(entryId) {
+        var g = gainNodesByEntryId[entryId];
+        if (g && g.gainNode) {
+          var boost = getBoostFromRow(entryId);
+          g.gainNode.gain.value = boost * v;
+        }
+      });
+    }
+  }
+  function getBoostFromRow(entryId) {
+    var row = chatList && chatList.querySelector('.chat-entry[data-id="' + entryId + '"]');
+    var slider = row && row.querySelector('.volume-boost-wrap input[type="range"]');
+    return slider ? parseFloat(slider.value) : 2.5;
+  }
+  function connectMediaWithGain(mediaElement, entryId, boostValue) {
+    if (!mediaElement || !entryId) return null;
+    var boost = (boostValue != null && boostValue > 0) ? boostValue : 2.5;
+    var effectiveGain = boost * getMasterVolume();
+    var stored = gainNodesByEntryId[entryId];
+    if (stored && stored.ctx && stored.gainNode) {
+      stored.gainNode.gain.value = effectiveGain;
+      return stored.gainNode;
+    }
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      var source = ctx.createMediaElementSource(mediaElement);
+      var gainNode = ctx.createGain();
+      gainNode.gain.value = effectiveGain;
+      source.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      gainNodesByEntryId[entryId] = { ctx: ctx, gainNode: gainNode };
+      return gainNode;
+    } catch (err) { console.warn('Connect media gain failed', err); return null; }
+  }
+  /** Ensure AudioContext is running so receiver actually hears playback. Returns a Promise. */
+  function ensureAudioContextRunning(entryId) {
+    var g = gainNodesByEntryId[entryId];
+    if (!g || !g.ctx) return Promise.resolve();
+    if (g.ctx.state === 'suspended') return g.ctx.resume();
+    return Promise.resolve();
+  }
+
+  var AUTO_HIDE_SECRET_MS = 6000;
+  function clearAutoHideTimer(ent) {
+    if (ent._autoHideTimerId) {
+      clearTimeout(ent._autoHideTimerId);
+      ent._autoHideTimerId = null;
+    }
+  }
+  function setMessageRevealed(entryId, revealed) {
+    var ent = chatEntries.find(function(x) { return String(x.id) === String(entryId); });
+    if (!ent) return;
+    var row = chatList.querySelector('.chat-entry[data-id="' + entryId + '"]');
+    if (!row) return;
+    clearAutoHideTimer(ent);
+    var media = row.querySelector('.cover-container audio, .cover-container video');
+    if (media) {
+      try { media.pause(); } catch (e) {}
+    }
+    if (revealed) {
+      ent._uiState = 'revealed';
+      row.dataset.state = 'revealed';
+      row.classList.remove('hidden-state');
+      row.classList.add('revealed-state');
+      ent._autoHideTimerId = setTimeout(function() {
+        ent._autoHideTimerId = null;
+        setMessageRevealed(entryId, false);
+        renderChat();
+      }, AUTO_HIDE_SECRET_MS);
+    } else {
+      ent._uiState = 'hidden';
+      row.dataset.state = 'hidden';
+      row.classList.remove('revealed-state');
+      row.classList.add('hidden-state');
+    }
+  }
+
+  var renderChatTimer = null;
+  function renderChat() {
+    if (renderChatTimer) clearTimeout(renderChatTimer);
+    renderChatTimer = setTimeout(renderChatNow, 50);
+  }
+  function renderChatNow() {
+    renderChatTimer = null;
+    chatList.innerHTML = '';
+    chatEntries.forEach(function(e) {
+      var div = document.createElement('div');
+      div.className = 'chat-entry message-bubble ' + (e.direction || 'in');
+      div.dataset.id = e.id;
+      var state = e._uiState || 'hidden';
+      div.dataset.state = state;
+      div.classList.add(state === 'revealed' ? 'revealed-state' : 'hidden-state');
+      if (e._justAdded) {
+        div.classList.add('chat-entry-new');
+        setTimeout(function() { e._justAdded = false; div.classList.remove('chat-entry-new'); }, 450);
+      }
+
+      var coverContainer = document.createElement('div');
+      coverContainer.className = 'cover-container';
+      coverContainer.setAttribute('data-entry-id', String(e.id));
+
+      if (e.mediaType === 'audio') {
+        var card = document.createElement('div');
+        card.className = 'audio-card' + (e.hasSecret ? ' has-secret' : '');
+        var cardLabel = e.sending ? 'Sending…' : (e.hasSecret && (e.message === undefined && e.error === undefined) ? 'Click to play & decrypt' : 'Click to play');
+        card.innerHTML = '<span class="icon">🎵</span><span class="label">' + cardLabel + '</span>';
+        if (e._justRevealed) card.classList.add('cover-burst');
+        card.setAttribute('data-entry-id', String(e.id));
+        card.style.cursor = 'pointer';
+        card.title = e.hasSecret && (e.message === undefined && e.error === undefined) ? 'Click to play and reveal' : 'Click to play';
+        var audioEl = null;
+        if (e.payload) {
+          var wavUrl = wavBlobUrlFromPcmB64(e.payload, e.sample_rate || e.sampleRate || 48000);
+          if (wavUrl) {
+            audioEl = document.createElement('audio');
+            audioEl.controls = true;
+            audioEl.preload = 'auto';
+            audioEl.src = wavUrl;
+            audioEl.volume = 1;
+            audioEl.muted = false;
+            audioEl.style.cssText = 'position:absolute;width:0;height:0;opacity:0;pointer-events:none;';
+            coverContainer.appendChild(audioEl);
+          }
+        }
+        card.addEventListener('click', function() {
+          var ent = chatEntries.find(function(x) { return String(x.id) === this.getAttribute('data-entry-id'); }.bind(this));
+          if (!ent || ent.sending) return;
+          var row = chatList.querySelector('.chat-entry[data-id="' + ent.id + '"]');
+          var media = row && row.querySelector('.cover-container audio');
+          if (media && ent.payload) {
+            media.muted = false;
+            media.volume = 1;
+            var boost = getBoostFromRow(ent.id);
+            connectMediaWithGain(media, ent.id, boost);
+            function doPlay() {
+              media.play().then(function() {
+                var level = analyzePcmB64(ent.payload);
+                setStatus('Playing audio…' + (level.hasSignal ? ' (' + level.db.toFixed(0) + ' dB)' : ' (silent/low)'), false);
+              }).catch(function(err) {
+                console.warn('Audio element play failed, using fallback', err);
+                playAudioFull(ent.payload, ent.sample_rate || ent.sampleRate || 48000, boost);
+              });
+            }
+            ensureAudioContextRunning(ent.id).then(doPlay).catch(function(e) { console.warn('AudioContext resume failed', e); doPlay(); });
+          } else if (ent.payload) playAudioFull(ent.payload, ent.sample_rate || ent.sampleRate || 48000, getBoostFromRow(ent.id));
+          if (ent._uiState === 'revealed') {
+            setMessageRevealed(ent.id, false);
+            renderChat();
+            return;
+          }
+          if (ent.message !== undefined || ent.secretPayload || ent.error || ent.secureLinkFileId) {
+            setMessageRevealed(ent.id, true);
+            return;
+          }
+          if (ent.direction === 'in' && ent.message === undefined && ent.error === undefined) {
+            if (!roomId || !socket) { setStatus('Not connected. Cannot decrypt.', true); return; }
+            setStatus('Decrypting…', false);
+            socket.emit('extract', { room_id: roomId, type: 'audio', payload: ent.payload, request_id: String(ent.id), sample_rate: ent.sample_rate || ent.sampleRate || 48000 });
+            ent.extracting = true;
+            startExtractTimeout(ent.id);
+            renderChat();
+            runDecryptAnimation(function() { renderChat(); });
+          }
+        });
+        var volWrap = document.createElement('div');
+        volWrap.className = 'volume-boost-wrap';
+        volWrap.innerHTML = '<label>🔊</label><input type="range" min="1" max="4" step="0.1" value="2.5" title="Volume boost 1x–4x">';
+        var volSlider = volWrap.querySelector('input');
+        volSlider.addEventListener('input', function() {
+          var g = gainNodesByEntryId[e.id];
+          if (g && g.gainNode) g.gainNode.gain.value = parseFloat(volSlider.value) * getMasterVolume();
+        });
+        coverContainer.appendChild(card);
+        coverContainer.appendChild(volWrap);
+        div.appendChild(coverContainer);
+      } else if (e.mediaType === 'video_clip') {
+        var frames = e.frames || [];
+        var firstPayload = frames[0];
+        if (!firstPayload) {
+          var placeV = document.createElement('div');
+          placeV.className = 'thumb';
+          placeV.style.minWidth = '120px'; placeV.style.minHeight = '80px'; placeV.style.background = 'var(--panel)';
+          placeV.style.display = 'flex'; placeV.style.alignItems = 'center'; placeV.style.justifyContent = 'center';
+          placeV.style.color = '#a0aec0';
+          placeV.textContent = e.sending ? 'Sending…' : 'Video';
+          coverContainer.appendChild(placeV);
+          var volWrapV = document.createElement('div');
+          volWrapV.className = 'volume-boost-wrap';
+          volWrapV.innerHTML = '<label>🔊</label><input type="range" min="1" max="4" step="0.1" value="2.5" title="Volume boost 1x–4x">';
+          coverContainer.appendChild(volWrapV);
+        } else {
+          var vidMime = (e.format === 'png') ? 'image/png' : 'image/jpeg';
+          var vidDataUrl = 'data:' + vidMime + ';base64,' + firstPayload;
+          var vidThumb = document.createElement('img');
+          vidThumb.className = 'thumb' + (e.hasSecret ? ' has-secret' : '');
+          if (e._justRevealed) vidThumb.classList.add('cover-burst');
+          vidThumb.src = vidDataUrl;
+          vidThumb.alt = 'Video clip';
+          vidThumb.style.cursor = 'pointer';
+          vidThumb.title = e.hasSecret && (e.message === undefined && e.error === undefined) ? 'Click to play & decrypt' : 'Click to play';
+          vidThumb.setAttribute('data-entry-id', String(e.id));
+          vidThumb.addEventListener('click', function() {
+            var ent = chatEntries.find(function(x) { return String(x.id) === this.getAttribute('data-entry-id'); }.bind(this));
+            if (!ent || ent.sending || !ent.frames || !ent.frames.length) return;
+            if (ent._uiState === 'revealed') {
+              setMessageRevealed(ent.id, false);
+              renderChat();
+              return;
+            }
+            if (ent.message !== undefined || ent.secretPayload || ent.error || ent.secureLinkFileId) {
+              var boost = getBoostFromRow(ent.id);
+              if (ent.audioPayload) playAudioFull(ent.audioPayload, ent.sample_rate || ent.sampleRate || 48000, boost);
+              playVideoFrames(ent.frames, ent.fps || 5, ent.format);
+              setMessageRevealed(ent.id, true);
+              return;
+            }
+            var boost = getBoostFromRow(ent.id);
+            if (ent.audioPayload) playAudioFull(ent.audioPayload, ent.sample_rate || ent.sampleRate || 48000, boost);
+            playVideoFrames(ent.frames, ent.fps || 5, ent.format);
+            if (ent.direction === 'in' && ent.hasSecret && ent.message === undefined && ent.error === undefined) {
+              if (!roomId || !socket) { setStatus('Not connected. Cannot decrypt.', true); return; }
+              setStatus('Decrypting…', false);
+              socket.emit('extract', { room_id: roomId, type: 'video_clip', frames: ent.frames, request_id: String(ent.id) });
+              ent.extracting = true;
+              startExtractTimeout(ent.id);
+              renderChat();
+              runDecryptAnimation(function() { renderChat(); });
+            }
+          });
+          coverContainer.appendChild(vidThumb);
+          var volWrapV = document.createElement('div');
+          volWrapV.className = 'volume-boost-wrap';
+          volWrapV.innerHTML = '<label>🔊</label><input type="range" min="1" max="4" step="0.1" value="2.5" title="Volume boost 1x–4x">';
+          coverContainer.appendChild(volWrapV);
+        }
+        div.appendChild(coverContainer);
+      } else {
+        if (e.sending || !e.payload) {
+          var place = document.createElement('div');
+          place.className = 'thumb';
+          place.style.minWidth = '120px'; place.style.minHeight = '80px'; place.style.background = '#2d3748';
+          place.style.display = 'flex'; place.style.alignItems = 'center'; place.style.justifyContent = 'center';
+          place.style.color = '#a0aec0';
+          place.textContent = e.sending ? 'Sending…' : 'Image';
+          coverContainer.appendChild(place);
+        } else {
+          var mime = (e.format === 'jpeg') ? 'image/jpeg' : 'image/png';
+          var dataUrl = 'data:' + mime + ';base64,' + e.payload;
+          var img = document.createElement('img');
+          img.className = 'thumb' + (e.hasSecret ? ' has-secret' : '');
+          if (e._justRevealed) img.classList.add('cover-burst');
+          img.src = dataUrl;
+          img.alt = 'Snapshot';
+          img.setAttribute('data-entry-id', String(e.id));
+          if (e.hasSecret && (e.message === undefined && e.error === undefined)) {
+            img.title = 'Click to expand and decrypt';
+            img.style.cursor = 'pointer';
+            img.addEventListener('click', function() {
+              var ent = chatEntries.find(function(x) { return String(x.id) === String(this.getAttribute('data-entry-id')); }.bind(this));
+              if (!ent || !ent.payload) return;
+              if (!roomId || !socket) { setStatus('Not connected. Cannot decrypt.', true); return; }
+              openSnapshotExpand(ent);
+              setStatus('Decrypting…', false);
+              socket.emit('extract', { room_id: roomId, type: ent.mediaType || 'image', payload: ent.payload, request_id: String(ent.id) });
+              ent.extracting = true;
+              startExtractTimeout(ent.id);
+              renderChat();
+              runDecryptAnimation(function() { renderChat(); });
+            });
+          }
+          coverContainer.appendChild(img);
+        }
+        div.appendChild(coverContainer);
+      }
+
+      var body = document.createElement('div');
+      body.className = 'body';
+      var secretContainer = document.createElement('div');
+      secretContainer.className = 'secret-container';
+      var secretInner = document.createElement('div');
+      secretInner.className = 'secret-inner';
+        if (e.hasSecret) {
+        if (e.mediaType === 'image' && e.payload) {
+          var isDecrypted = e.secretPayload || e.message !== undefined || e.error || (e.secretType === 'secure_link' && e.secureLinkFileId);
+          if (e.expanded) {
+            body.appendChild(document.createTextNode('Viewing full screen — click overlay to close.'));
+          } else if (isDecrypted) {
+            var wrap = document.createElement('div');
+            wrap.className = 'revealed';
+            if (e._justRevealed) wrap.classList.add('secret-reveal');
+            if (e.error) {
+              var errSpan = document.createElement('div');
+              errSpan.className = 'revealed err';
+              errSpan.textContent = e.error;
+              wrap.appendChild(errSpan);
+            } else if (e.secretType === 'secure_link' && e.secureLinkFileId) {
+              var openBtn2 = document.createElement('button');
+              openBtn2.type = 'button';
+              openBtn2.className = 'panel-btn';
+              openBtn2.textContent = 'Open in New Tab';
+              openBtn2.onclick = function() {
+                var origin = location.origin || (location.protocol + '//' + location.host);
+                var url = origin + '/secure-file/' + encodeURIComponent(e.secureLinkFileId) + '?room_id=' + encodeURIComponent(roomId);
+                window.open(url, '_blank', 'noopener');
+              };
+              wrap.appendChild(openBtn2);
+              var dlBtn2 = document.createElement('button');
+              dlBtn2.type = 'button';
+              dlBtn2.className = 'panel-btn';
+              dlBtn2.style.marginLeft = '8px';
+              dlBtn2.textContent = 'Download';
+              dlBtn2.onclick = function() {
+                var origin = location.origin || (location.protocol + '//' + location.host);
+                var url = origin + '/secure-file/' + encodeURIComponent(e.secureLinkFileId) + '?room_id=' + encodeURIComponent(roomId);
+                fetch(url).then(function(r) { return r.blob(); }).then(function(blob) {
+                  downloadBlob(blob, e.hybridFilename || 'secure_file');
+                }).catch(function(err) { setStatus('Download failed: ' + (err.message || err), true); });
+              };
+              wrap.appendChild(dlBtn2);
+            } else if (e.message !== undefined) {
+              var pMsg = document.createElement('div');
+              pMsg.textContent = e.message;
+              wrap.appendChild(pMsg);
+              var copyBtn2 = document.createElement('button');
+              copyBtn2.type = 'button';
+              copyBtn2.className = 'action-btn';
+              copyBtn2.style.marginTop = '6px';
+              copyBtn2.innerHTML = '📋 Copy';
+              copyBtn2.onclick = function() {
+                navigator.clipboard.writeText(e.message).then(function() { setStatus('Copied.', false); }).catch(function() { setStatus('Copy failed.', true); });
+              };
+              wrap.appendChild(copyBtn2);
+            } else if (e.secretType === 'image' && e.secretPayload) {
+              var imgMime = 'image/jpeg';
+              try {
+                var bin = atob(e.secretPayload);
+                if (bin.length >= 2 && bin.charCodeAt(0) === 0x89 && bin.charCodeAt(1) === 0x50) imgMime = 'image/png';
+                else if (bin.length >= 2 && bin.charCodeAt(0) === 0xFF && bin.charCodeAt(1) === 0xD8) imgMime = 'image/jpeg';
+              } catch (err) {}
+              var revImg = document.createElement('img');
+              revImg.className = 'revealed-media';
+              revImg.src = 'data:' + imgMime + ';base64,' + e.secretPayload;
+              revImg.alt = 'Revealed';
+              wrap.appendChild(revImg);
+              var revDl = document.createElement('button');
+              revDl.type = 'button';
+              revDl.className = 'action-btn secondary';
+              revDl.style.marginTop = '6px';
+              revDl.innerHTML = '⬇ Download';
+              revDl.onclick = function() {
+                var dataUrl = 'data:' + imgMime + ';base64,' + e.secretPayload;
+                var a = document.createElement('a');
+                a.href = dataUrl;
+                a.download = 'revealed_image.' + (imgMime === 'image/png' ? 'png' : 'jpg');
+                a.click();
+              };
+              wrap.appendChild(revDl);
+            }
+            secretInner.appendChild(wrap);
+          } else {
+            body.appendChild(document.createTextNode('Click snapshot above to expand and decrypt.'));
+          }
+        } else if (e.extracting) {
+          body.innerHTML = '<span class="tap-hint">Decrypting…</span>';
+        } else if (e.secretType === 'secure_link' && e.secureLinkFileId) {
+          var wrap = document.createElement('div');
+          wrap.className = 'revealed';
+          var title = document.createElement('div');
+          title.style.fontWeight = '600';
+          title.style.marginBottom = '8px';
+          title.textContent = 'Secure Media Available';
+          wrap.appendChild(title);
+          var openBtn = document.createElement('button');
+          openBtn.type = 'button';
+          openBtn.className = 'panel-btn';
+          openBtn.style.marginTop = '4px';
+          openBtn.textContent = 'Open in New Tab';
+          openBtn.onclick = function() {
+            var origin = location.origin || (location.protocol + '//' + location.host);
+            var url = origin + '/secure-file/' + encodeURIComponent(e.secureLinkFileId) + '?room_id=' + encodeURIComponent(roomId);
+            window.open(url, '_blank', 'noopener');
+          };
+          wrap.appendChild(openBtn);
+          var dlBtn = document.createElement('button');
+          dlBtn.type = 'button';
+          dlBtn.className = 'panel-btn';
+          dlBtn.style.marginLeft = '8px';
+          dlBtn.textContent = 'Download';
+          dlBtn.onclick = function() {
+            var origin = location.origin || (location.protocol + '//' + location.host);
+            var url = origin + '/secure-file/' + encodeURIComponent(e.secureLinkFileId) + '?room_id=' + encodeURIComponent(roomId);
+            fetch(url).then(function(r) { return r.blob(); }).then(function(blob) {
+              downloadBlob(blob, e.hybridFilename || 'secure_file');
+            }).catch(function(err) { setStatus('Download failed: ' + (err.message || err), true); });
+          };
+          wrap.appendChild(dlBtn);
+          secretInner.appendChild(wrap);
+        } else if (e.secretType && e.secretPayload) {
+          var wrap = document.createElement('div');
+          wrap.className = 'revealed';
+          if (e._justRevealed) wrap.classList.add('secret-reveal');
+          var openInNewTab = function(dataUrl) {
+            var w = window.open('', '_blank');
+            if (e.secretType === 'image') w.document.write('<html><body style="margin:0;background:#111"><img src="' + dataUrl + '" style="max-width:100%;height:auto;display:block" alt="Revealed" /></body></html>');
+            else if (e.secretType === 'audio') w.document.write('<html><body style="margin:12px;background:#111;color:#eee"><audio controls src="' + dataUrl + '"></audio><p><a href="' + dataUrl + '" download="revealed_audio">Download</a></p></body></html>');
+            else if (e.secretType === 'video') w.document.write('<html><body style="margin:12px;background:#111;color:#eee"><video controls src="' + dataUrl + '" style="max-width:100%"></video><p><a href="' + dataUrl + '" download="revealed_video">Download</a></p></body></html>');
+          };
+          if (e.secretType === 'image') {
+            var imgMime = 'image/jpeg';
+            try {
+              var bin = atob(e.secretPayload);
+              if (bin.length >= 2 && bin.charCodeAt(0) === 0x89 && bin.charCodeAt(1) === 0x50) imgMime = 'image/png';
+              else if (bin.length >= 2 && bin.charCodeAt(0) === 0xFF && bin.charCodeAt(1) === 0xD8) imgMime = 'image/jpeg';
+            } catch (err) {}
+            var dataUrl = 'data:' + imgMime + ';base64,' + e.secretPayload;
+            var img = document.createElement('img');
+            img.className = 'revealed-media';
+            img.src = dataUrl;
+            img.alt = 'Revealed image';
+            wrap.appendChild(img);
+            var lnk = document.createElement('a');
+            lnk.href = '#'; lnk.textContent = ' Open in new tab'; lnk.style.marginLeft = '8px'; lnk.style.color = '#58a6ff';
+            lnk.onclick = function(ev) { ev.preventDefault(); openInNewTab(dataUrl); };
+            wrap.appendChild(lnk);
+            var imgDl = document.createElement('a');
+            imgDl.href = dataUrl;
+            imgDl.download = 'revealed_image.' + (imgMime === 'image/png' ? 'png' : 'jpg');
+            imgDl.style.marginLeft = '8px';
+            imgDl.style.color = '#58a6ff';
+            imgDl.textContent = ' Download';
+            wrap.appendChild(imgDl);
+          } else if (e.secretType === 'audio') {
+            var audMime = 'audio/wav';
+            try {
+              var aBin = atob(e.secretPayload);
+              if (aBin.length >= 4 && aBin.substring(0, 4) === 'RIFF') audMime = 'audio/wav';
+              else if (aBin.length >= 3 && aBin.substring(0, 3) === 'ID3') audMime = 'audio/mpeg';
+              else if (aBin.length >= 4 && aBin.charCodeAt(0) === 0xFF && (aBin.charCodeAt(1) & 0xE0) === 0xE0) audMime = 'audio/mpeg';
+            } catch (err) {}
+            var dataUrl = 'data:' + audMime + ';base64,' + e.secretPayload;
+            var aud = document.createElement('audio');
+            aud.className = 'revealed-media';
+            aud.controls = true;
+            aud.src = dataUrl;
+            wrap.appendChild(aud);
+            var pAud = document.createElement('p');
+            pAud.className = 'revealed-hint';
+            pAud.style.fontSize = '0.8rem'; pAud.style.color = '#8b949e'; pAud.style.marginTop = '6px';
+            pAud.innerHTML = '▶ Play above or <a href="#" style="color:#58a6ff">open in new tab</a> (no download needed).';
+            pAud.querySelector('a').onclick = function(ev) { ev.preventDefault(); openInNewTab(dataUrl); };
+            wrap.appendChild(pAud);
+            var fallback = document.createElement('a');
+            fallback.href = dataUrl;
+            fallback.download = 'revealed_audio';
+            fallback.textContent = ' Download';
+            fallback.style.marginLeft = '8px';
+            fallback.title = 'Downloaded file may not open in some players if it was trimmed.';
+            wrap.appendChild(fallback);
+          } else if (e.secretType === 'video') {
+            var vidMime = 'video/mp4';
+            try {
+              var vBin = atob(e.secretPayload);
+              if (vBin.length >= 12 && vBin.substring(4, 8) === 'ftyp') vidMime = 'video/mp4';
+              else if (vBin.length >= 4 && vBin.substring(0, 4) === 'RIFF') vidMime = 'video/webm';
+            } catch (err) {}
+            var dataUrl = 'data:' + vidMime + ';base64,' + e.secretPayload;
+            var vid = document.createElement('video');
+            vid.className = 'revealed-media';
+            vid.controls = true;
+            vid.src = dataUrl;
+            vid.playsInline = true;
+            wrap.appendChild(vid);
+            var pVid = document.createElement('p');
+            pVid.className = 'revealed-hint';
+            pVid.style.fontSize = '0.8rem'; pVid.style.color = '#8b949e'; pVid.style.marginTop = '6px';
+            pVid.innerHTML = '▶ Play above or <a href="#" style="color:#58a6ff">open in new tab</a> (no download needed). QuickTime may not open downloaded trimmed files.';
+            pVid.querySelector('a').onclick = function(ev) { ev.preventDefault(); openInNewTab(dataUrl); };
+            wrap.appendChild(pVid);
+            var fallback = document.createElement('a');
+            fallback.href = dataUrl;
+            fallback.download = 'revealed_video';
+            fallback.textContent = ' Download';
+            fallback.style.marginLeft = '8px';
+            fallback.title = 'Downloaded file may not open in QuickTime if it was trimmed. Use play above or Open in new tab.';
+            wrap.appendChild(fallback);
+          } else if (e.secretType === 'application/octet-stream' && e.secretPayload) {
+            var dataUrl = 'data:application/octet-stream;base64,' + e.secretPayload;
+            var a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = e.hybridFilename || 'download';
+            a.className = 'revealed-media';
+            a.textContent = 'Download secure file';
+            a.style.color = '#58a6ff';
+            wrap.appendChild(a);
+          }
+          secretInner.appendChild(wrap);
+        } else if (e.message !== undefined) {
+          var p = document.createElement('div');
+          p.className = 'revealed';
+          p.textContent = e.message;
+          secretInner.appendChild(p);
+          var msgActions = document.createElement('div');
+          msgActions.style.marginTop = '8px';
+          msgActions.style.fontSize = '0.85rem';
+          var copyBtn = document.createElement('button');
+          copyBtn.type = 'button';
+          copyBtn.className = 'action-btn';
+          copyBtn.innerHTML = '📋 Copy';
+          copyBtn.onclick = function() {
+            navigator.clipboard.writeText(e.message).then(function() { setStatus('Copied to clipboard.', false); }).catch(function() { setStatus('Copy failed.', true); });
+          };
+          var txtDl = document.createElement('button');
+          txtDl.type = 'button';
+          txtDl.className = 'action-btn secondary';
+          txtDl.style.marginLeft = '8px';
+          txtDl.innerHTML = '⬇ Download .txt';
+          txtDl.onclick = function() {
+            downloadBlob(new Blob([e.message], { type: 'text/plain' }), 'hidden_message.txt');
+          };
+          msgActions.appendChild(copyBtn);
+          msgActions.appendChild(txtDl);
+          secretInner.appendChild(msgActions);
+        } else if (e.error !== undefined) {
+          var err = document.createElement('div');
+          err.className = 'revealed err';
+          err.textContent = e.error;
+          secretInner.appendChild(err);
+        } else if (e.direction === 'out') {
+          body.innerHTML = '<span class="tap-hint">' + (e.sending ? 'Sending…' : (e.mediaType === 'audio' ? 'Sent' : 'Sent with hidden message')) + '</span>';
+        } else {
+          body.innerHTML = '<span class="tap-hint">' + (e.mediaType === 'audio' ? '👆 Click the audio box above to play and reveal the hidden message' : '👆 Click the photo above to reveal the hidden message') + '</span>';
+        }
+      } else if (e.visibleOnly && e.message !== undefined) {
+        body.textContent = e.message;
+        body.style.whiteSpace = 'pre-wrap';
+      } else {
+        body.innerHTML = '<span class="tap-hint">' + (e.direction === 'out' ? 'Sent' : (e.mediaType === 'audio' ? 'Received — click the audio box above to play' : 'Received')) + '</span>';
+      }
+      var secretPanel = document.createElement('div');
+      secretPanel.className = 'secret-panel';
+      var secretActions = document.createElement('div');
+      secretActions.className = 'secret-actions';
+      if (!e.sending && (e.payload || (e.frames && e.frames.length))) {
+        var coverLink = document.createElement('a');
+        coverLink.href = '#';
+        coverLink.className = 'download-cover-btn';
+        coverLink.innerHTML = '⬇ Download cover';
+        coverLink.onclick = function(ev) {
+          ev.preventDefault();
+          if (e.mediaType === 'audio' && e.payload) {
+            downloadCoverAudio(e.payload, e.sample_rate || e.sampleRate || 48000, 'cover_audio.wav');
+          } else if (e.mediaType === 'image' && e.payload) {
+            var mime = (e.format === 'jpeg') ? 'image/jpeg' : 'image/png';
+            var dataUrl = 'data:' + mime + ';base64,' + e.payload;
+            fetch(dataUrl).then(function(r) { return r.blob(); }).then(function(blob) {
+              downloadBlob(blob, 'cover_image.' + (e.format === 'jpeg' ? 'jpg' : 'png'));
+            });
+          } else if (e.mediaType === 'video_clip' && e.frames && e.frames.length) {
+            var mime = (e.format === 'png') ? 'image/png' : 'image/jpeg';
+            var dataUrl = 'data:' + mime + ';base64,' + e.frames[0];
+            fetch(dataUrl).then(function(r) { return r.blob(); }).then(function(blob) {
+              downloadBlob(blob, 'cover_video_frame_1.' + (e.format === 'png' ? 'png' : 'jpg'));
+            });
+          }
+        };
+        secretActions.appendChild(coverLink);
+      }
+      secretPanel.appendChild(body);
+      secretContainer.appendChild(secretInner);
+      secretPanel.appendChild(secretContainer);
+      secretPanel.appendChild(secretActions);
+      div.appendChild(secretPanel);
+      if (e._justRevealed) {
+        setTimeout(function() { delete e._justRevealed; }, 700);
+      }
+      chatList.appendChild(div);
+    });
+  }
+
+  var webrtcSignalProcessing = false;
+  function processOneWebRTCSignal(d) {
+    if (!pc || !d.from_sid || d.from_sid === socket.id) return Promise.resolve();
+    var state = pc.signalingState;
+    if (d.type === 'offer' && d.sdp) {
+      if (state !== 'stable') return Promise.resolve();
+      return pc.setRemoteDescription(new RTCSessionDescription(d.sdp)).then(function() {
+        return pc.createAnswer();
+      }).then(function(answer) {
+        if (pc.signalingState !== 'have-remote-offer') return Promise.resolve();
+        return pc.setLocalDescription(answer);
+      }).then(function() {
+        if (roomId && socket && pc.localDescription) socket.emit('webrtc_signal', { room_id: roomId, type: 'answer', sdp: pc.localDescription });
+      });
+    }
+    if (d.type === 'answer' && d.sdp) {
+      if (state !== 'have-local-offer') return Promise.resolve();
+      return pc.setRemoteDescription(new RTCSessionDescription(d.sdp));
+    }
+    if (d.type === 'ice' && d.candidate) {
+      return pc.addIceCandidate(new RTCIceCandidate(d.candidate)).catch(function() {});
+    }
+    return Promise.resolve();
+  }
+  function drainPendingWebRTCSignals() {
+    if (!pc || pendingWebRTCSignals.length === 0 || webrtcSignalProcessing) return;
+    webrtcSignalProcessing = true;
+    var d = pendingWebRTCSignals.shift();
+    processOneWebRTCSignal(d).then(function() {
+      webrtcSignalProcessing = false;
+      drainPendingWebRTCSignals();
+    }).catch(function(err) {
+      console.warn('WebRTC signal error:', err);
+      webrtcSignalProcessing = false;
+      drainPendingWebRTCSignals();
+    });
+  }
+
+  function connect() {
+    const origin = location.origin.replace(/^http/, 'ws');
+    socket = io(origin, { path: '/socket.io', transports: ['websocket', 'polling'] });
+    socket.on('connect', () => {
+      setStatus('Connected.', false);
+      if (callUI && callUI.style.display !== 'none' && roomId) {
+        socket.emit('join_room', { room_id: roomId, embed_mode: embedMode });
+      }
+      socket.on('connected', (d) => {});
+      socket.on('room_created', (d) => {
+        roomId = d.room_id;
+        isRoomCreator = true;
+        embedMode = d.embed_mode || embedMode;
+        linkBox.style.display = 'block';
+        shareLink.textContent = location.origin + '/call/' + roomId;
+        modeBadge.textContent = 'Mode: ' + (embedMode === 'audio' ? 'Audio' : embedMode === 'image' ? 'Image snapshot' : 'Video');
+        modalOverlay.style.display = 'none';
+        callUI.style.display = 'grid';
+        startMedia();
+      });
+      socket.on('joined_room', (d) => {
+        var wasAlreadyInCall = (callUI && callUI.style.display !== 'none' && roomId);
+        roomId = d.room_id;
+        isRoomCreator = false;
+        embedMode = d.embed_mode || embedMode;
+        modeBadge.textContent = 'Mode: ' + (embedMode === 'audio' ? 'Audio' : embedMode === 'image' ? 'Image snapshot' : 'Video');
+        modalOverlay.style.display = 'none';
+        callUI.style.display = 'grid';
+        if (!wasAlreadyInCall) startMedia();
+      });
+      socket.on('join_error', (d) => {
+        setStatus('Join failed: ' + (d.error || 'Unknown'), true);
+      });
+      socket.on('user_joined', (d) => {
+        var n = d.count || 0;
+        peerCount.textContent = n + ' peer(s)';
+        if (n >= 2 && remotePlaceholder && remotePlaceholder.style.display !== 'none') {
+          remotePlaceholder.textContent = "Connecting WebRTC…";
+        }
+        if (n >= 2 && pc && isRoomCreator && !offerSentByCreator) {
+          offerSentByCreator = true;
+          pc.createOffer().then(function(offer) { return pc.setLocalDescription(offer); }).then(function() {
+            if (roomId && socket) socket.emit('webrtc_signal', { room_id: roomId, type: 'offer', sdp: pc.localDescription });
+          }).catch(function(err) {
+            offerSentByCreator = false;
+            setStatus('WebRTC offer failed: ' + err.message, true);
+          });
+        }
+      });
+      socket.on('key_established', (d) => {
+        keyEstablished = d.status === 'ok';
+        roomKeyB64 = d.key_b64 || null;
+        keyBadge.textContent = keyEstablished ? '🔐 Secure key established' : '🔑 Key error';
+        keyBadge.className = 'badge ' + (keyEstablished ? 'secure' : 'pending');
+        if (keyEstablished) {
+          var celeb = document.getElementById('keyEstablishedCelebration');
+          if (celeb) { celeb.classList.add('visible'); celeb.setAttribute('aria-hidden', 'false'); }
+          setTimeout(function() {
+            if (celeb) { celeb.classList.remove('visible'); celeb.setAttribute('aria-hidden', 'true'); }
+          }, 1800);
+        }
+      });
+      socket.on('webrtc_signal', function(d) {
+        if (!d.from_sid || d.from_sid === socket.id) return;
+        pendingWebRTCSignals.push(d);
+        drainPendingWebRTCSignals();
+      });
+      socket.on('stego_media', function(d) {
+        var isOut = d.from_sid === socket.id;
+        var entry = {
+          direction: isOut ? 'out' : 'in',
+          mediaType: d.media_type || 'image',
+          payload: d.payload,
+          frames: d.frames,
+          fps: d.fps || 5,
+          format: d.format || ((d.media_type || 'image') === 'image' ? 'png' : (d.media_type === 'video_clip' ? 'png' : undefined)),
+          sample_rate: d.sample_rate || 48000,
+          audioPayload: d.audio_payload || null,
+          hasSecret: d.has_secret !== false,
+          sending: false,
+          transmission_mode: d.transmission_mode || null
+        };
+        if (isOut) {
+          var lastOut = null;
+          for (var i = chatEntries.length - 1; i >= 0; i--) {
+            if (chatEntries[i].direction === 'out' && chatEntries[i].sending && (chatEntries[i].mediaType === 'audio' || chatEntries[i].mediaType === 'image' || chatEntries[i].mediaType === 'video_clip')) {
+              lastOut = chatEntries[i];
+              break;
+            }
+          }
+          if (lastOut) {
+            lastOut.payload = entry.payload;
+            lastOut.mediaType = d.media_type || lastOut.mediaType;
+            lastOut.sending = false;
+            lastOut.sample_rate = entry.sample_rate || lastOut.sample_rate;
+            lastOut.frames = entry.frames;
+            lastOut.fps = entry.fps;
+            lastOut.audioPayload = entry.audioPayload;
+            lastOut.transmission_mode = entry.transmission_mode;
+            if (entry.format) lastOut.format = entry.format;
+            renderChat();
+            return;
+          }
+        }
+        addChatEntry(entry);
+        renderChat();
+        if (entry.direction === 'out') pendingContinuation = null;
+      });
+      socket.on('stego_media_partial', function(d) {
+        var bitsLeft = d.bits_remaining || 0;
+        var sid = d.session_id;
+        setStatus('Partial: ' + bitsLeft + ' bits left. Recording 5s more…', false);
+        pendingContinuation = { session_id: sid };
+        setTimeout(function() {
+          if (!pendingContinuation || pendingContinuation.session_id !== sid) return;
+          if (!roomId || !socket || !localStream) return;
+          stopAudioRecording();
+          var coverAudio = getRecordedAudioPCM(5);
+          if (localStream) startAudioRecording(localStream);
+          if (!coverAudio) { setStatus('Need mic for continuation.', true); pendingContinuation = null; return; }
+          socket.emit('send_stego_media', {
+            room_id: roomId,
+            embed_mode: 'audio',
+            cover_audio: coverAudio,
+            sample_rate: recordedSampleRate,
+            continuation: true,
+            session_id: sid
+          });
+          setStatus('Sending remaining bits…', false);
+        }, 6000);
+      });
+      socket.on('stego_media_error', function(d) {
+        pendingContinuation = null;
+        var err = d.error || 'Steganography failed.';
+        setStatus(err, true);
+        var lastOut = null;
+        for (var i = chatEntries.length - 1; i >= 0; i--) {
+          if (chatEntries[i].direction === 'out' && chatEntries[i].sending) {
+            lastOut = chatEntries[i];
+            break;
+          }
+        }
+        if (lastOut) {
+          lastOut.sending = false;
+          lastOut.error = err;
+        }
+        renderChat();
+      });
+      socket.on('extract_result', (d) => {
+        clearExtractTimeout();
+        dismissDecryptOverlay();
+        var rid = d.request_id != null ? String(d.request_id) : null;
+        var ent = rid ? chatEntries.find(function(x) { return String(x.id) === rid; }) : null;
+        if (!ent) {
+          ent = chatEntries.filter(function(x) {
+            return x.direction === 'in' && (x.mediaType === 'audio' || x.mediaType === 'video_clip' || x.mediaType === 'image' || x.mediaType === 'video') && x.message === undefined && x.error === undefined && x.secretType === undefined && x.secretPayload === undefined;
+          }).pop();
+        }
+        if (ent) {
+          ent.extracting = false;
+          if (d.success) {
+            if (d.chunk_session_id != null && d.chunk_index != null && d.total_chunks != null && d.chunk_file_type != null && d.secret_payload != null) {
+              var sid = d.chunk_session_id;
+              chunkBuffers[sid] = chunkBuffers[sid] || { total: d.total_chunks, fileType: d.chunk_file_type, payloads: {} };
+              chunkBuffers[sid].payloads[d.chunk_index] = d.secret_payload;
+              var buf = chunkBuffers[sid];
+              if (Object.keys(buf.payloads).length === buf.total) {
+                var parts = [];
+                for (var i = 0; i < buf.total; i++) parts.push(buf.payloads[i]);
+                var totalLen = 0;
+                for (var k = 0; k < parts.length; k++) totalLen += atob(parts[k]).length;
+                var combined = new Uint8Array(totalLen);
+                var off = 0;
+                for (var k = 0; k < parts.length; k++) {
+                  var s = atob(parts[k]);
+                  for (var j = 0; j < s.length; j++) combined[off++] = s.charCodeAt(j);
+                }
+                ent.secretType = buf.fileType;
+                ent.secretPayload = btoa(String.fromCharCode.apply(null, combined));
+                ent._justRevealed = true;
+                ent._uiState = 'revealed';
+                delete chunkBuffers[sid];
+                setStatus('Hidden file revealed (all chunks received).', false);
+              } else {
+                setStatus('Chunk ' + (d.chunk_index + 1) + ' of ' + buf.total + ' received. Decrypt other chunks to reveal file.', false);
+              }
+            } else if (d.secret_type === 'hybrid' && d.file_id) {
+              ent.secretType = 'secure_link';
+              ent.secureLinkFileId = d.file_id;
+              ent.secureLinkExpiry = d.expiry_time;
+              ent.hybridFilename = d.filename || 'download';
+              ent._uiState = 'revealed';
+              setStatus('Secure media available. Click "Open in New Tab" to view.', false);
+              renderChat();
+            } else {
+              if (d.message !== undefined) ent.message = d.message;
+              if (d.secret_type && d.secret_payload) {
+                ent.secretType = d.secret_type;
+                ent.secretPayload = d.secret_payload;
+              }
+              ent._justRevealed = true;
+              ent._uiState = 'revealed';
+              setStatus('Hidden message revealed.', false);
+            }
+          } else {
+            ent.error = d.error || 'Unknown';
+            setStatus('Extract failed: ' + (d.error || 'Unknown'), true);
+          }
+          if (currentExpandedEntryId != null && String(ent.id) === String(currentExpandedEntryId)) {
+            fillSnapshotExpandOverlay(ent);
+          }
+          renderChat();
+          if (d.success && ent._uiState === 'revealed') {
+            clearAutoHideTimer(ent);
+            ent._autoHideTimerId = setTimeout(function() {
+              ent._autoHideTimerId = null;
+              ent._uiState = 'hidden';
+              renderChat();
+            }, AUTO_HIDE_SECRET_MS);
+          }
+        } else {
+          var statusMsg = d.success ? ('Decrypted: ' + (d.message || (d.secret_type ? d.secret_type + ' file' : '—'))) : ('Extract failed: ' + (d.error || 'Unknown'));
+          setStatus(statusMsg, !d.success);
+        }
+      });
+      socket.on('embed_failed', (d) => {
+        setStatus('Sent as secure link. Receiver can open in new tab.', false);
+        btnSendHidden.disabled = false;
+      });
+    });
+    socket.on('disconnect', () => setStatus('Disconnected.', true));
+  }
+
+  function endCall() {
+    var rid = roomId;
+    if (rid && socket) socket.emit('leave_room', { room_id: rid });
+    if (pc) { try { pc.close(); } catch (e) {} pc = null; }
+    dataChannel = null;
+    if (localStream) { localStream.getTracks().forEach(function(t) { t.stop(); }); localStream = null; }
+    stopAudioRecording();
+    stopVideoRecording();
+    clearExtractTimeout();
+    dismissDecryptOverlay();
+    closeSnapshotExpand();
+    chatEntries = [];
+    roomId = null;
+    keyEstablished = false;
+    roomKeyB64 = null;
+    offerSentByCreator = false;
+    pendingWebRTCSignals = [];
+    if (localVideo) localVideo.srcObject = null;
+    if (remoteVideo) { remoteVideo.srcObject = null; remoteVideo.style.display = 'none'; }
+    if (remotePlaceholder) { remotePlaceholder.style.display = 'block'; remotePlaceholder.textContent = 'Waiting for peer…'; }
+    if (callUI) callUI.style.display = 'none';
+    if (modalOverlay) modalOverlay.style.display = 'flex';
+    hideSecretNotification(true);
+    setStatus('Call ended.', false);
+    renderChat();
+  }
+  var secretNotifEl = document.getElementById('secretNotificationIcon');
+  if (secretNotifEl) {
+    secretNotifEl.addEventListener('click', function() {
+      hideSecretNotification(true);
+      var lastSecret = chatEntries.filter(function(x) { return x.direction === 'in' && x.hasSecret; }).pop();
+      if (lastSecret && chatList) {
+        var row = chatList.querySelector('[data-id="' + lastSecret.id + '"]');
+        if (row) row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    });
+  }
+
+  function startMedia() {
+    function onStream(stream) {
+      localStream = stream;
+      localVideo.srcObject = stream;
+      localVideo.style.display = 'block';
+      if (localPlaceholder) localPlaceholder.style.display = 'none';
+      hideMediaDeniedUI();
+      currentVideoTrack = stream.getVideoTracks()[0] || null;
+      startAudioRecording(stream);
+      wireMediaControls(stream);
+      var config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+      pc = new RTCPeerConnection(config);
+      offerSentByCreator = false;
+      stream.getTracks().forEach(function(track) { pc.addTrack(track, stream); });
+      dataChannel = pc.createDataChannel('hidden', { ordered: true });
+      dataChannel.onmessage = function(ev) {
+        var msg;
+        try { msg = JSON.parse(ev.data); } catch (e) { return; }
+        if (msg.type !== 'hidden' || !msg.payload) return;
+        if (typeof WebRTCCrypto === 'undefined') return;
+        WebRTCCrypto.decryptHiddenMessage(roomKeyB64, msg.payload).then(function(dec) {
+          if (!dec) return;
+          var entry = { direction: 'in', hasSecret: true };
+          if (dec.message) entry.message = dec.message;
+          if (dec.secret_type) entry.secretType = dec.secret_type;
+          if (dec.secret_payload) entry.secretPayload = dec.secret_payload;
+          if (dec.secret_type === 'hybrid' && dec.file_id) {
+            entry.secretType = 'secure_link';
+            entry.secureLinkFileId = dec.file_id;
+            entry.secureLinkExpiry = dec.expiry_time;
+          }
+          if (dec.message || dec.secret_type) addChatEntry(entry);
+        });
+      };
+      dataChannel.onopen = function() { setStatus('Secure channel ready. You can send hidden messages.', false); };
+      pc.ontrack = function(ev) {
+        if (!remoteVideo || !ev.track) return;
+        if (!remoteVideo.srcObject) {
+          remoteVideo.srcObject = new MediaStream();
+        }
+        remoteVideo.srcObject.addTrack(ev.track);
+        remoteVideo.style.display = 'block';
+        remoteVideo.muted = false;
+        remoteVideo.volume = 1.0;
+        remoteVideo.play().catch(function() {});
+        if (remotePlaceholder) {
+          remotePlaceholder.style.display = 'none';
+          remotePlaceholder.textContent = 'Waiting for peer…';
+        }
+      };
+      pc.onconnectionstatechange = function() {
+        var state = pc ? pc.connectionState : '';
+        if (remotePlaceholder && (state === 'failed' || state === 'disconnected' || state === 'closed')) {
+          remotePlaceholder.style.display = 'block';
+          remotePlaceholder.textContent = state === 'failed' ? 'Connection failed. Refresh and rejoin.' : 'Connecting WebRTC…';
+          if (remoteVideo) {
+            remoteVideo.srcObject = null;
+            remoteVideo.style.display = 'none';
+          }
+        }
+      };
+      pc.onicecandidate = function(ev) {
+        if (ev.candidate && roomId && socket) socket.emit('webrtc_signal', { room_id: roomId, type: 'ice', candidate: ev.candidate });
+      };
+      pc.ondatachannel = function(ev) {
+        if (dataChannel) return;
+        dataChannel = ev.channel;
+        dataChannel.onmessage = function(ev) {
+          var msg;
+          try { msg = JSON.parse(ev.data); } catch (e) { return; }
+          if (msg.type !== 'hidden' || !msg.payload) return;
+          if (typeof WebRTCCrypto === 'undefined') return;
+          WebRTCCrypto.decryptHiddenMessage(roomKeyB64, msg.payload).then(function(dec) {
+            if (!dec) return;
+            var entry = { direction: 'in', hasSecret: true };
+            if (dec.message) entry.message = dec.message;
+            if (dec.secret_type) entry.secretType = dec.secret_type;
+            if (dec.secret_payload) entry.secretPayload = dec.secret_payload;
+            if (dec.secret_type === 'hybrid' && dec.file_id) {
+              entry.secretType = 'secure_link';
+              entry.secureLinkFileId = dec.file_id;
+              entry.secureLinkExpiry = dec.expiry_time;
+            }
+            if (dec.message || dec.secret_type) addChatEntry(entry);
+          });
+        };
+        dataChannel.onopen = function() { setStatus('Secure channel ready.', false); };
+      };
+      drainPendingWebRTCSignals();
+      if (embedMode === 'video') {
+        startVideoRecording();
+        var btnRecord = document.getElementById('btnRecord');
+        if (btnRecord) { btnRecord.classList.add('recording'); btnRecord.title = 'Stop recording'; }
+        setStatus('Video recording started. You can send as hidden in about a second.', false);
+      }
+    }
+    function showMediaDeniedUI(err) {
+      if (localPlaceholder) {
+        localPlaceholder.style.display = 'block';
+        localPlaceholder.innerHTML = '<p class="media-denied-msg">Camera & microphone are required for the call.</p>' +
+          '<p class="media-denied-hint">' + (err || 'Access denied.') + '</p>' +
+          '<p class="media-denied-hint">Use <strong>Chrome</strong> or <strong>Firefox</strong> and allow access when prompted. If you blocked it, click the lock/info icon in the address bar and set Camera and Microphone to Allow. If you are not on localhost, the page must be served over HTTPS.</p>' +
+          '<button type="button" id="btnRetryMedia" class="btn btn-primary">Allow & try again</button>';
+        var btn = document.getElementById('btnRetryMedia');
+        if (btn) btn.onclick = function() { startMedia(); };
+      }
+      localVideo.style.display = 'none';
+      setStatus('Camera/mic access denied. Allow in browser and click "Allow & try again".', true);
+    }
+    function hideMediaDeniedUI() {
+      if (localPlaceholder) {
+        localPlaceholder.innerHTML = '';
+        localPlaceholder.style.display = 'none';
+      }
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      showMediaDeniedUI('This browser does not support camera/microphone access. Use Chrome or Firefox.');
+      return;
+    }
+    var optsAudioRaw = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      channelCount: 1,
+      sampleRate: 48000
+    };
+    var optsVideoAudio = { video: true, audio: optsAudioRaw };
+    var optsVideoOnly = { video: true };
+    var optsAudioOnly = { audio: optsAudioRaw };
+    navigator.mediaDevices.getUserMedia(optsVideoAudio)
+      .then(onStream)
+      .catch(function(err1) {
+        return navigator.mediaDevices.getUserMedia(optsVideoOnly)
+          .then(function(stream) {
+            return onStream(stream);
+          })
+          .catch(function(err2) {
+            return navigator.mediaDevices.getUserMedia(optsAudioOnly)
+              .then(function(stream) { return onStream(stream); })
+              .catch(function(err3) {
+                var msg = (err1 && err1.name) ? err1.name : 'Permission denied';
+                if (err1 && err1.message) msg += ': ' + err1.message;
+                showMediaDeniedUI(msg);
+              });
+          });
+      });
+  }
+
+  const MAX_VIDEO_WIDTH = 400;         // smaller frames = smaller payload, less disconnect risk
+  const MAX_SNAPSHOT_WIDTH = 800;
+  const VIDEO_JPEG_QUALITY = 0.5;     // lower = smaller video cover payload
+  var captureCanvas = null;
+  var captureCtx = null;
+  var captureWorker = null;
+  var captureWorkerPending = null;
+  var captureInFlight = false;
+  try {
+    captureWorker = new Worker(location.origin + '/static/video_capture_worker.js');
+    captureWorker.onmessage = function (e) {
+      var cb = captureWorkerPending;
+      captureWorkerPending = null;
+      if (cb) {
+        if (e.data && e.data.base64) cb(e.data.base64);
+        else cb(captureFrameSync(false));
+      }
+    };
+    captureWorker.onerror = function () {
+      var cb = captureWorkerPending;
+      captureWorkerPending = null;
+      if (cb) cb(captureFrameSync(false));
+    };
+  } catch (err) {}
+
+  function getCaptureCanvas(width, height) {
+    if (!captureCanvas || captureCanvas.width !== width || captureCanvas.height !== height) {
+      captureCanvas = document.createElement('canvas');
+      captureCanvas.width = width;
+      captureCanvas.height = height;
+      captureCtx = captureCanvas.getContext('2d');
+    }
+    return captureCanvas;
+  }
+
+  function captureFrameSync(forEmbed) {
+    if (!localVideo.videoWidth || !roomId || !socket) return null;
+    var w = localVideo.videoWidth;
+    var h = localVideo.videoHeight;
+    var maxW = forEmbed ? MAX_SNAPSHOT_WIDTH : MAX_VIDEO_WIDTH;
+    var scale = w > maxW ? maxW / w : 1;
+    var cw = Math.round(w * scale);
+    var ch = Math.round(h * scale);
+    var canvas = getCaptureCanvas(cw, ch);
+    captureCtx.drawImage(localVideo, 0, 0, w, h, 0, 0, cw, ch);
+    return canvas.toDataURL('image/jpeg', forEmbed ? 0.82 : VIDEO_JPEG_QUALITY).split(',')[1];
+  }
+
+  function captureFrame(forEmbed) {
+    return captureFrameSync(forEmbed);
+  }
+
+  function captureFrameAsync(forEmbed, callback) {
+    if (!localVideo.videoWidth || !roomId || !socket) { if (callback) callback(null); return; }
+    var w = localVideo.videoWidth;
+    var h = localVideo.videoHeight;
+    var maxW = forEmbed ? MAX_SNAPSHOT_WIDTH : MAX_VIDEO_WIDTH;
+    var scale = w > maxW ? maxW / w : 1;
+    var cw = Math.round(w * scale);
+    var ch = Math.round(h * scale);
+    var canvas = getCaptureCanvas(cw, ch);
+    captureCtx.drawImage(localVideo, 0, 0, w, h, 0, 0, cw, ch);
+    if (captureWorker && !forEmbed) {
+      try {
+        var imageData = captureCtx.getImageData(0, 0, cw, ch);
+        var data = imageData.data.buffer;
+        captureWorkerPending = callback;
+        captureWorker.postMessage({ width: cw, height: ch, data: data }, [data]);
+        return;
+      } catch (err) {
+        callback(captureFrameSync(false));
+        return;
+      }
+    }
+    if (callback) callback(captureFrameSync(forEmbed));
+  }
+
+  function startSending() {
+    // No-op: media is P2P via WebRTC; no server-side frame/snapshot/audio streaming
+  }
+
+  function float32ToInt16PCM(float32Samples) {
+    var n = float32Samples.length;
+    var int16 = new Int16Array(n);
+    var peak = 0;
+    for (var i = 0; i < n; i++) {
+      var s = Math.max(-1, Math.min(1, float32Samples[i]));
+      peak = Math.max(peak, Math.abs(s));
+      var val = s < 0 ? Math.round(s * 0x8000) : Math.round(s * 0x7FFF);
+      int16[i] = Math.max(-32768, Math.min(32767, val));
+    }
+    if (n > 0 && (window.STEGO_DEBUG_AUDIO || peak > 0.001)) {
+      console.log('[PCM] float32→int16: samples=' + n + ', max amplitude=' + peak.toFixed(4));
+    }
+    return int16;
+  }
+
+  function createWavBlob(int16PCM, sampleRate, numChannels) {
+    numChannels = numChannels || 1;
+    var numSamples = int16PCM.length;
+    var byteRate = sampleRate * numChannels * 2;
+    var blockAlign = numChannels * 2;
+    var dataSize = numSamples * 2;
+    var buffer = new ArrayBuffer(44 + dataSize);
+    var view = new DataView(buffer);
+    var pos = 0;
+    function writeStr(s) { for (var i = 0; i < s.length; i++) view.setUint8(pos++, s.charCodeAt(i)); }
+    writeStr('RIFF');
+    view.setUint32(pos, 36 + dataSize, true); pos += 4;
+    writeStr('WAVE');
+    writeStr('fmt ');
+    view.setUint32(pos, 16, true); pos += 4;
+    view.setUint16(pos, 1, true); pos += 2;
+    view.setUint16(pos, numChannels, true); pos += 2;
+    view.setUint32(pos, sampleRate, true); pos += 4;
+    view.setUint32(pos, byteRate, true); pos += 4;
+    view.setUint16(pos, blockAlign, true); pos += 2;
+    view.setUint16(pos, 16, true); pos += 2;
+    writeStr('data');
+    view.setUint32(pos, dataSize, true); pos += 4;
+    var pcm = new Int16Array(buffer, 44, numSamples);
+    pcm.set(int16PCM);
+    return new Blob([buffer], { type: 'audio/wav' });
+  }
+
+  function startAudioRecording(stream) {
+    if (!stream) return;
+    if (!stream.getAudioTracks().length) {
+      console.warn('startAudioRecording: No audio tracks available.');
+      return;
+    }
+    recordedChunks = [];
+    try {
+      var ctx = new (window.AudioContext || window.webkitAudioContext)();
+      audioRecorderContext = ctx;
+      console.log('[Recording] AudioContext sampleRate:', ctx.sampleRate);
+      var src = ctx.createMediaStreamSource(stream);
+      audioRecorderSource = src;
+      var gainNode = ctx.createGain();
+      gainNode.gain.value = 1.0;
+      audioRecorderGainNode = gainNode;
+      var bufferSize = 4096;
+      var processor = ctx.createScriptProcessor(bufferSize, 1, 1);
+      audioRecorderNode = processor;
+      var processCount = 0;
+      function startGraph() {
+        recordedSampleRate = ctx.sampleRate;
+        recordingActive = true;
+        console.log('[Recording] Started. AudioContext sampleRate:', ctx.sampleRate);
+        processor.onaudioprocess = function(ev) {
+          if (!recordingActive) return;
+          var input = ev.inputBuffer.getChannelData(0);
+          var chunk = new Float32Array(input.length);
+          var peak = 0;
+          var sumSq = 0;
+          for (var i = 0; i < input.length; i++) {
+            chunk[i] = input[i];
+            peak = Math.max(peak, Math.abs(input[i]));
+            sumSq += input[i] * input[i];
+          }
+          var rms = Math.sqrt(sumSq / input.length);
+          recordedChunks.push(chunk);
+          processCount++;
+          if (processCount % 50 === 0) {
+            var first10 = [];
+            for (var f = 0; f < Math.min(10, input.length); f++) first10.push(input[f].toFixed(6));
+            console.log('[Recording] Chunks:', recordedChunks.length, 'RMS:', rms.toFixed(6), 'max amplitude:', peak.toFixed(6), 'first 10 samples:', first10.join(', '));
+          }
+        };
+        src.connect(gainNode);
+        gainNode.connect(processor);
+        var dummyGain = ctx.createGain();
+        dummyGain.gain.value = 0;
+        processor.connect(dummyGain);
+        dummyGain.connect(ctx.destination);
+      }
+      if (ctx.state === 'suspended') {
+        ctx.resume().then(function() {
+          console.log('[Recording] AudioContext resumed, state:', ctx.state);
+          startGraph();
+        }).catch(function(e) { console.warn('AudioContext resume failed', e); });
+      } else {
+        startGraph();
+      }
+    } catch (e) { console.warn('Audio recording start failed', e); }
+  }
+
+  function stopAudioRecording() {
+    recordingActive = false;
+    if (audioRecorderNode) { try { audioRecorderNode.disconnect(); } catch (e) {} audioRecorderNode = null; }
+    if (audioRecorderGainNode) { try { audioRecorderGainNode.disconnect(); } catch (e) {} audioRecorderGainNode = null; }
+    if (audioRecorderSource) { try { audioRecorderSource.disconnect(); } catch (e) {} audioRecorderSource = null; }
+    if (audioRecorderContext) { try { audioRecorderContext.close(); } catch (e) {} audioRecorderContext = null; }
+    var total = recordedChunks.reduce(function(sum, c) { return sum + c.length; }, 0);
+    console.log('[Recording] Stopped. Total samples:', total, 'chunks:', recordedChunks.length);
+  }
+
+  function getRecordedAudioPCM(durationSeconds) {
+    if (!recordedChunks.length || durationSeconds <= 0) return null;
+    var wantSamples = Math.round(recordedSampleRate * durationSeconds);
+    var totalSamples = recordedChunks.reduce(function(sum, c) { return sum + c.length; }, 0);
+    if (totalSamples < 1024) return null;
+    wantSamples = Math.min(totalSamples, wantSamples);
+    var merged = new Float32Array(totalSamples);
+    var offset = 0;
+    for (var k = 0; k < recordedChunks.length; k++) {
+      merged.set(recordedChunks[k], offset);
+      offset += recordedChunks[k].length;
+    }
+    var takeFrom = Math.max(0, totalSamples - wantSamples);
+    var slice = merged.subarray(takeFrom, takeFrom + wantSamples);
+    var int16 = float32ToInt16PCM(slice);
+    var maxAmp = 0;
+    for (var i = 0; i < slice.length; i++) maxAmp = Math.max(maxAmp, Math.abs(slice[i]));
+    console.log('[Recording] getRecordedAudioPCM: last ' + durationSeconds + 's, ' + wantSamples + ' samples, max amplitude=', maxAmp.toFixed(4));
+    var binary = '';
+    for (var j = 0; j < int16.length; j++) {
+      var v = int16[j];
+      binary += String.fromCharCode(v & 0xff, (v >> 8) & 0xff);
+    }
+    return btoa(binary);
+  }
+
+  function startVideoRecording() {
+    if (videoRecordIntervalId) return;
+    videoFrameBuffer = [];
+    videoRecordIntervalId = setInterval(function() {
+      if (embedMode !== 'video' || !localVideo || !localVideo.videoWidth) return;
+      var b64 = captureFrameSync(true);
+      if (b64) {
+        videoFrameBuffer.push(b64);
+        if (videoFrameBuffer.length > VIDEO_RECORD_MAX_FRAMES) videoFrameBuffer.shift();
+      }
+    }, 1000 / VIDEO_RECORD_FPS);
+  }
+  function stopVideoRecording() {
+    if (videoRecordIntervalId) {
+      clearInterval(videoRecordIntervalId);
+      videoRecordIntervalId = null;
+    }
+    videoFrameBuffer = [];
+  }
+
+  function wireMediaControls(stream) {
+    var btnMute = document.getElementById('btnMute');
+    var btnCamera = document.getElementById('btnCamera');
+    var btnRecord = document.getElementById('btnRecord');
+    var remoteVol = document.getElementById('remoteVolume');
+    var audioTracks = stream && stream.getAudioTracks();
+    var videoTracks = stream && stream.getVideoTracks();
+    if (btnMute && audioTracks && audioTracks.length) {
+      btnMute.onclick = function() {
+        var en = !audioTracks[0].enabled;
+        audioTracks[0].enabled = en;
+        btnMute.classList.toggle('active', !en);
+        btnMute.title = en ? 'Mute microphone' : 'Unmute microphone';
+        btnMute.textContent = en ? '🎤' : '🔇';
+      };
+    }
+    if (btnCamera && (currentVideoTrack || (videoTracks && videoTracks.length))) {
+      var camTrackRef = function() { return currentVideoTrack || (videoTracks && videoTracks[0]); };
+      btnCamera.onclick = function() {
+        var vt = camTrackRef();
+        if (!vt) return;
+        var en = !vt.enabled;
+        vt.enabled = en;
+        btnCamera.classList.toggle('active', !en);
+        btnCamera.title = en ? 'Turn camera off' : 'Turn camera on';
+        btnCamera.textContent = en ? '📷' : '📵';
+      };
+    }
+    if (remoteVol && remoteVideo) {
+      remoteVol.oninput = function() { remoteVideo.volume = parseFloat(remoteVol.value, 10); };
+    }
+    var masterVolEl = document.getElementById('masterVolume');
+    if (masterVolEl) {
+      masterVolEl.oninput = function() { applyMasterVolume(); };
+    }
+    if (btnRecord) {
+      btnRecord.onclick = function() {
+        if (videoRecordIntervalId) {
+          stopVideoRecording();
+          btnRecord.classList.remove('recording');
+          btnRecord.title = 'Start recording video for embedding';
+        } else {
+          startVideoRecording();
+          btnRecord.classList.add('recording');
+          btnRecord.title = 'Stop recording';
+        }
+      };
+    }
+    var btnScreen = document.getElementById('btnScreenShare');
+    if (btnScreen) {
+      btnScreen.onclick = function() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) { setStatus('Screen share not supported.', true); return; }
+        if (screenShareStream) {
+          screenShareStream.getTracks().forEach(function(t) { t.stop(); });
+          screenShareStream = null;
+          btnScreen.classList.remove('active');
+          setStatus('Screen share stopped. Switching back to camera.', false);
+          navigator.mediaDevices.getUserMedia({ video: true }).then(function(camStream) {
+            var camTrack = camStream.getVideoTracks()[0];
+            if (!camTrack || !pc || !stream) return;
+            pc.getSenders().forEach(function(sender) {
+              if (sender.track && sender.track.kind === 'video') sender.replaceTrack(camTrack);
+            });
+            var oldV = stream.getVideoTracks()[0];
+            if (oldV) { oldV.stop(); stream.removeTrack(oldV); }
+            stream.addTrack(camTrack);
+            currentVideoTrack = camTrack;
+            setStatus('Back to camera.', false);
+          }).catch(function(err) { setStatus('Could not switch back to camera: ' + (err.message || err), true); });
+          return;
+        }
+        navigator.mediaDevices.getDisplayMedia({ video: true }).then(function(displayStream) {
+          screenShareStream = displayStream;
+          var vTrack = displayStream.getVideoTracks();
+          if (vTrack.length && pc && videoTracks && videoTracks.length) {
+            pc.getSenders().forEach(function(sender) {
+              if (sender.track && sender.track.kind === 'video') sender.replaceTrack(vTrack[0]);
+            });
+            videoTracks[0].stop();
+            stream.removeTrack(videoTracks[0]);
+            stream.addTrack(vTrack[0]);
+            currentVideoTrack = vTrack[0];
+            btnScreen.classList.add('active');
+            btnScreen.title = 'Stop screen share';
+            setStatus('Screen sharing. Click screen share again to stop.', false);
+          }
+        }).catch(function(err) { setStatus('Screen share cancelled or failed.', true); });
+      };
+    }
+  }
+
+  function playAudioChunk(b64) {
+    try {
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const int16 = new Int16Array(bytes.buffer);
+      const float32 = new Float32Array(int16.length);
+      for (let i = 0; i < int16.length; i++) float32[i] = int16[i] / (int16[i] < 0 ? 0x8000 : 0x7FFF);
+      if (!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+      const buf = audioContext.createBuffer(1, float32.length, 48000);
+      buf.getChannelData(0).set(float32);
+      const src = audioContext.createBufferSource();
+      src.buffer = buf;
+      src.connect(audioContext.destination);
+      src.start(0);
+    } catch (e) {}
+  }
+
+  btnStartCall.addEventListener('click', () => {
+    embedMode = document.querySelector('input[name="embed_mode"]:checked').value;
+    btnStartCall.disabled = true;
+    setStatus('Creating room…', false);
+    connect();
+    socket.once('connect', () => {
+      socket.emit('create_room', { embed_mode: embedMode });
+    });
+  });
+
+  if (btnEndCall) btnEndCall.addEventListener('click', endCall);
+  var cyberToggle = document.getElementById('cyberModeToggle');
+  if (cyberToggle) cyberToggle.addEventListener('change', function() { document.body.classList.toggle('cyber-mode', this.checked); });
+
+  btnJoinRoom.addEventListener('click', () => {
+    let rid = roomIdInput.value.trim();
+    if (location.pathname.startsWith('/call/')) rid = location.pathname.replace('/call/', '').trim();
+    if (!rid) { setStatus('Enter or open a room link.', true); return; }
+    embedMode = document.querySelector('input[name="embed_mode"]:checked').value;
+    btnJoinRoom.disabled = true;
+    setStatus('Joining…', false);
+    connect();
+    socket.once('connect', () => {
+      socket.emit('join_room', { room_id: rid, embed_mode: embedMode });
+    });
+  });
+
+  copyLinkBtn.addEventListener('click', () => {
+    const url = location.origin + '/call/' + roomId;
+    navigator.clipboard.writeText(url).then(() => setStatus('Link copied.', false));
+  });
+
+  function compressImageToBase64(file, maxW, quality, done) {
+    var img = new Image();
+    var url = URL.createObjectURL(file);
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      var w = img.width, h = img.height;
+      if (w > maxW || h > maxW) {
+        if (w > h) { h = Math.round(h * maxW / w); w = maxW; } else { w = Math.round(w * maxW / h); h = maxW; }
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      var dataUrl = canvas.toDataURL('image/jpeg', quality);
+      var b64 = dataUrl.split(',')[1];
+      done(b64);
+    };
+    img.onerror = function() { URL.revokeObjectURL(url); done(null); };
+    img.src = url;
+  }
+
+  var fileDropZone = document.getElementById('fileDropZone');
+  if (fileDropZone && fileToHide) {
+    fileDropZone.addEventListener('click', function(ev) { if (ev.target === fileToHide) return; fileToHide.click(); });
+    fileDropZone.addEventListener('dragover', function(ev) { ev.preventDefault(); ev.stopPropagation(); fileDropZone.classList.add('dragover'); });
+    fileDropZone.addEventListener('dragleave', function(ev) { ev.preventDefault(); fileDropZone.classList.remove('dragover'); });
+    fileDropZone.addEventListener('drop', function(ev) {
+      ev.preventDefault();
+      fileDropZone.classList.remove('dragover');
+      var f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+      if (!f) return;
+      try {
+        var dt = new DataTransfer();
+        dt.items.add(f);
+        fileToHide.files = dt.files;
+        fileToHide.dispatchEvent(new Event('change', { bubbles: true }));
+      } catch (err) { setStatus('Drop not supported in this browser.', true); }
+    });
+  }
+  fileToHide.addEventListener('change', function() {
+    var f = this.files[0];
+    selectedSecretFile = null;
+    fileToHideHint.textContent = 'No file (text above)';
+    if (!f) return;
+    var type = 'image';
+    if (f.type.indexOf('audio') !== -1) type = 'audio';
+    else if (f.type.indexOf('video') !== -1) type = 'video';
+    else if (f.type.indexOf('image') !== -1) type = 'image';
+    if (type === 'image') {
+      fileToHideHint.textContent = 'Compressing image…';
+      compressImageToBase64(f, 800, 0.55, function(b64) {
+        if (b64) {
+          selectedSecretFile = { b64: b64, type: 'image', name: f.name };
+          fileToHideHint.textContent = f.name + ' (image, compressed)';
+        } else {
+          fileToHideHint.textContent = 'Failed to load image';
+        }
+        updateSendModeLabel();
+      });
+      return;
+    }
+    fileToHideHint.textContent = 'Loading ' + type + '…';
+    var r = new FileReader();
+    r.onload = function() {
+      var buf = r.result;
+      var bytes = new Uint8Array(buf);
+      var bin = '';
+      var CHUNK = 4096;
+      for (var i = 0; i < bytes.length; i += CHUNK) {
+        var slice = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
+        bin += String.fromCharCode.apply(null, Array.from(slice));
+      }
+      selectedSecretFile = { b64: btoa(bin), type: type, name: f.name };
+      fileToHideHint.textContent = f.name + ' (' + type + ', ' + (bytes.length / 1024).toFixed(1) + ' KB)';
+      updateSendModeLabel();
+    };
+    r.readAsArrayBuffer(f);
+  });
+
+  function getSecretPayload() {
+    if (hybridTokenPending) {
+      var t = hybridTokenPending;
+      hybridTokenPending = null;
+      return { secret_payload: t, secret_type: 'hybrid_token' };
+    }
+    if (selectedSecretFile) return { secret_payload: selectedSecretFile.b64, secret_type: selectedSecretFile.type };
+    var msg = messageInput.value.trim();
+    if (msg) return { secret_message: msg };
+    return null;
+  }
+  function currentSecretPayload() {
+    if (hybridTokenPending) return { secret_payload: hybridTokenPending, secret_type: 'hybrid_token' };
+    if (selectedSecretFile) return { secret_payload: selectedSecretFile.b64, secret_type: selectedSecretFile.type };
+    var msg = (messageInput && messageInput.value) ? messageInput.value.trim() : '';
+    if (msg) return { secret_message: msg };
+    return null;
+  }
+  function updateSendModeLabel() {
+    var el = document.getElementById('sendModeLabel');
+    if (!el) return;
+    var sp = currentSecretPayload();
+    if (!sp) { el.textContent = ''; return; }
+    var mode = transmissionModeFromPayload(sp);
+    el.textContent = 'Sending as: ' + transmissionModeLabel(mode);
+  }
+
+  function clearSecretFile() {
+    selectedSecretFile = null;
+    fileToHide.value = '';
+    fileToHideHint.textContent = 'No file (text above)';
+    updateSendModeLabel();
+  }
+
+  function payloadBytesFromB64(b64) {
+    if (!b64) return 0;
+    return Math.floor((b64.length * 3) / 4);
+  }
+
+  // 3-Tier: < 5KB live_covert, 5KB–100KB stego_media, >= 100KB secure_link
+  var TIER1_MAX = 5 * 1024;
+  var TIER2_MAX = 100 * 1024;
+  function approxPayloadBytes(sp) {
+    if (!sp) return 0;
+    if (sp.secret_message) return 1 + new TextEncoder().encode(sp.secret_message).length;
+    var raw = (selectedSecretFile && selectedSecretFile.b64) ? selectedSecretFile.b64 : (sp.secret_payload || '');
+    return 1 + payloadBytesFromB64(raw);
+  }
+  function transmissionModeFromPayload(sp) {
+    var bytes = approxPayloadBytes(sp);
+    if (bytes >= TIER2_MAX) return 'secure_link';
+    if (bytes >= TIER1_MAX) return 'stego_media';
+    return 'live_covert';
+  }
+  function transmissionModeLabel(mode) {
+    if (mode === 'live_covert') return 'Covert Voice';
+    if (mode === 'stego_media') return 'Stego Media';
+    if (mode === 'secure_link') return 'Secure Link';
+    return mode;
+  }
+
+  function audioCapacityBytes(samples) {
+    return Math.max(0, Math.floor((samples - 32) / 8) - 64);
+  }
+
+  function videoCapacityBytes(numFrames) {
+    var bitsPerFrame = 640 * 480 * 3;
+    return Math.max(0, Math.floor((numFrames * bitsPerFrame - 32) / 8) - 64);
+  }
+
+  function estimatedEncryptedSize(payloadBytes) {
+    return ENCRYPT_OVERHEAD + Math.ceil(payloadBytes * 1.15);
+  }
+
+  function formatBytes(n) {
+    if (n >= 1048576) return (n / 1048576).toFixed(1) + ' MB';
+    return (n / 1024).toFixed(1) + ' KB';
+  }
+
+  function doHybridUploadAndSend() {
+    if (!selectedSecretFile || !roomId) { setStatus('Select a file first.', false); return; }
+    if (!keyEstablished) { setStatus('Wait for Secure key established.', false); return; }
+    setStatus('Sending via Secure Hybrid Transfer…', false, true);
+    var baseUrl = location.origin;
+    fetch(baseUrl + '/secure-upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room_id: roomId, file: selectedSecretFile.b64, filename: selectedSecretFile.name || 'download' })
+    }).then(function(r) {
+      if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'Upload failed'); });
+      return r.json();
+    }).then(function(data) {
+      if (!data.fileId) throw new Error('No fileId returned');
+      hybridPendingInfo = { file_id: data.fileId, checksum: data.checksum, expiry_time: data.expiryTime, filename: data.filename || 'download' };
+      setStatus('Sending secure link to peer…', false, true);
+      btnSendHidden.click();
+    }).catch(function(err) {
+      setStatus('Hybrid upload failed: ' + (err.message || err), true);
+      btnSendHidden.disabled = false;
+    });
+  }
+
+  function uploadAndEmbedLinkInCover(coverPayload, mediaTypeForEntry, onDone) {
+    if (!selectedSecretFile || !roomId) { onDone('Select a file first.'); return; }
+    setStatus('Uploading file, then embedding link in cover…', false);
+    var baseUrl = location.origin;
+    fetch(baseUrl + '/secure-upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ room_id: roomId, file: selectedSecretFile.b64, filename: selectedSecretFile.name || 'download' })
+    }).then(function(r) {
+      if (!r.ok) return r.json().then(function(e) { throw new Error(e.error || 'Upload failed'); });
+      return r.json();
+    }).then(function(data) {
+      if (!data.encryptedToken) { throw new Error('No token from server'); }
+      var payload = {
+        room_id: roomId,
+        embed_mode: embedMode,
+        secret_message: null,
+        secret_payload: data.encryptedToken,
+        secret_type: 'hybrid_token'
+      };
+      if (coverPayload.cover_frames) payload.cover_frames = coverPayload.cover_frames; payload.fps = coverPayload.fps;
+      if (coverPayload.cover_b64) payload.cover_b64 = coverPayload.cover_b64;
+      if (coverPayload.cover_audio) { payload.cover_audio = coverPayload.cover_audio; payload.sample_rate = coverPayload.sample_rate || AUDIO_SAMPLE_RATE; }
+      addChatEntry({ direction: 'out', mediaType: mediaTypeForEntry, hasSecret: true, sending: true });
+      socket.emit('send_stego_media', payload);
+      if (coverPayload.cover_frames) videoFrameBuffer = [];
+      clearSecretFile();
+      var coverName = embedMode === 'audio' ? 'audio' : embedMode === 'image' ? 'snapshot' : 'video';
+      setStatus('Secure link embedded in ' + coverName + '. Receiver decrypts fast and opens in new tab.', false);
+      if (onDone) onDone();
+    }).catch(function(err) {
+      setStatus('Failed: ' + (err.message || err), true);
+      if (onDone) onDone(err.message);
+    });
+  }
+
+  function updateChunkProgress(sent, total) {
+    if (!largeSecretProgressWrap || !total) return;
+    var pct = Math.round((sent / total) * 100);
+    largeSecretProgressLabel.textContent = 'Embedding hidden data: ' + pct + '%';
+    largeSecretProgressFill.style.width = pct + '%';
+    largeSecretProgressWrap.style.display = 'block';
+  }
+
+  function startAutoChunkStreaming() {
+    if (autoChunkIntervalId) return;
+    autoChunkStreaming = true;
+    setStatus('Streaming hidden data progressively…', false);
+    autoChunkIntervalId = setInterval(function() {
+      if (!pendingChunks) { clearInterval(autoChunkIntervalId); autoChunkIntervalId = null; autoChunkStreaming = false; return; }
+      btnSendHidden.click();
+    }, 1200);
+  }
+
+  function stopAutoChunkStreaming() {
+    if (autoChunkIntervalId) { clearInterval(autoChunkIntervalId); autoChunkIntervalId = null; }
+    autoChunkStreaming = false;
+    if (largeSecretProgressWrap) largeSecretProgressWrap.style.display = 'none';
+  }
+
+  function buildPendingChunksFromPayload() {
+    var pl = getSecretPayload();
+    if (!pl || !pl.secret_payload || !selectedSecretFile) return null;
+    var raw = atob(pl.secret_payload);
+    var rawLen = raw.length;
+    var chunks = [];
+    for (var i = 0; i < rawLen; i += CHUNK_SIZE_BYTES) {
+      var end = Math.min(i + CHUNK_SIZE_BYTES, rawLen);
+      try { chunks.push(btoa(raw.substring(i, end))); } catch (e) { chunks.push(btoa(raw.substring(i, end))); }
+    }
+    return { sessionId: Date.now().toString(36) + Math.random().toString(36).slice(2, 10), fileType: selectedSecretFile.type, chunks: chunks, nextIndex: 0 };
+  }
+
+  btnSendHidden.addEventListener('click', function() {
+    if (!roomId || !socket) { setStatus('Not in a call.', true); return; }
+    if (!keyEstablished) { setStatus('Wait for Secure key established.', true); return; }
+
+    if (hybridPendingInfo) {
+      var payloadObj = { type: 'hybrid', file_id: hybridPendingInfo.file_id, checksum: hybridPendingInfo.checksum, expiry_time: hybridPendingInfo.expiry_time, filename: hybridPendingInfo.filename };
+      hybridPendingInfo = null;
+      if (!dataChannel || dataChannel.readyState !== 'open') { setStatus('Waiting for peer connection.', true); return; }
+      if (typeof WebRTCCrypto === 'undefined') { setStatus('Crypto not loaded.', true); return; }
+      addChatEntry({ direction: 'out', message: 'Secure file (hybrid)', hasSecret: true });
+      WebRTCCrypto.encryptHiddenMessage(roomKeyB64, payloadObj).then(function(encB64) {
+        if (!encB64) { setStatus('Encrypt failed.', true); return; }
+        dataChannel.send(JSON.stringify({ type: 'hidden', payload: encB64 }));
+        clearSecretFile();
+        setStatus('Hidden message sent.', false);
+      }).catch(function() { setStatus('Encrypt failed.', true); });
+      return;
+    }
+
+    var sp = getSecretPayload();
+    if (!sp) { setStatus('Type a message or choose a file to hide.', true); return; }
+
+    var cover_b64 = null;
+    var cover_frames = null;
+    if (embedMode === 'video') {
+      if (!videoFrameBuffer || videoFrameBuffer.length < 3) {
+        setStatus('Video is recording. Wait a second or two then send (recorded video will be used as cover).', true);
+        return;
+      }
+      cover_frames = videoFrameBuffer.slice();
+    } else if (embedMode === 'image') {
+      cover_b64 = typeof captureFrameSync === 'function' ? captureFrameSync(true) : null;
+      if (!cover_b64) { setStatus('Camera required for image mode.', true); return; }
+    }
+
+    // 3-Tier: >= 100KB -> Secure Link (upload + embed token)
+    var txMode = transmissionModeFromPayload(sp);
+    var useLinkOnly = (txMode === 'secure_link') && !!(selectedSecretFile && sp.secret_payload);
+    if (useLinkOnly) {
+      var coverPayload = {};
+      if (cover_frames) { coverPayload.cover_frames = cover_frames; coverPayload.fps = VIDEO_RECORD_FPS; }
+      if (cover_b64) coverPayload.cover_b64 = cover_b64;
+      if (embedMode === 'audio') {
+        stopAudioRecording();
+        var ca = getRecordedAudioPCM(10);
+        if (localStream) startAudioRecording(localStream);
+        if (!ca) { setStatus('Allow microphone for audio cover.', true); return; }
+        coverPayload.cover_audio = ca;
+        coverPayload.sample_rate = recordedSampleRate;
+      }
+      setStatus('Sending as: ' + transmissionModeLabel(txMode) + '…', false);
+      var mediaTypeForEntry = embedMode === 'audio' ? 'audio' : (embedMode === 'video' ? 'video_clip' : 'image');
+      uploadAndEmbedLinkInCover(coverPayload, mediaTypeForEntry);
+      return;
+    }
+
+    var payload = {
+      room_id: roomId,
+      embed_mode: embedMode,
+      secret_message: sp.secret_message || null,
+      secret_payload: sp.secret_payload || null,
+      secret_type: (sp.secret_type || 'text').toLowerCase()
+    };
+    if (cover_b64) payload.cover_b64 = cover_b64;
+    if (embedMode === 'audio') {
+      stopAudioRecording();
+      var audioSec = (txMode === 'stego_media') ? 10 : 5;
+      var coverAudio = getRecordedAudioPCM(audioSec);
+      if (localStream) startAudioRecording(localStream);
+      if (!coverAudio) {
+        var total = recordedChunks.reduce(function(s, c) { return s + c.length; }, 0);
+        if (!recordedChunks.length || total < 1024) {
+          setStatus('No audio recorded yet. Speak for 1–2 seconds after joining, then send.', true);
+        } else {
+          setStatus('Allow microphone and speak to send audible audio cover.', true);
+        }
+        return;
+      }
+      payload.cover_audio = coverAudio;
+      payload.sample_rate = recordedSampleRate;
+    }
+    if (cover_frames) {
+      payload.cover_frames = cover_frames;
+      payload.fps = VIDEO_RECORD_FPS;
+      stopAudioRecording();
+      var coverAudioVideo = getRecordedAudioPCM(2);
+      if (localStream) startAudioRecording(localStream);
+      if (coverAudioVideo) {
+        payload.cover_audio = coverAudioVideo;
+        payload.sample_rate = recordedSampleRate;
+      }
+      videoFrameBuffer = [];
+    }
+
+    var mediaTypeForEntry = embedMode === 'audio' ? 'audio' : (embedMode === 'video' ? 'video_clip' : 'image');
+    setStatus('Sending as: ' + transmissionModeLabel(txMode) + '…', false);
+    addChatEntry({
+      direction: 'out',
+      mediaType: mediaTypeForEntry,
+      hasSecret: true,
+      sending: true
+    });
+    socket.emit('send_stego_media', payload);
+    clearSecretFile();
+    updateSendModeLabel();
+  });
+
+  if (messageInput) {
+    messageInput.addEventListener('input', updateSendModeLabel);
+    messageInput.addEventListener('keyup', updateSendModeLabel);
+  }
+
+  if (pathRoom) {
+    roomIdInput.value = pathRoom;
+  }
+  window.checkAudioCover = checkAudioCover;
+  window.analyzePcmB64 = analyzePcmB64;
+})();
+  </script>
+</body>
+</html>
